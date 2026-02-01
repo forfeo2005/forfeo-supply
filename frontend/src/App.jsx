@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 
-// CORRECTION : Render donne le "host" sans le protocole.
-// On vérifie si l'URL commence par http, sinon on ajoute https://
-const RAW_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const API_URL = RAW_URL.startsWith('http') ? RAW_URL : `https://${RAW_URL}`;
+// CORRECTION : On met l'adresse publique exacte qu'on a vue sur ta capture d'écran
+// Cela évite tous les problèmes de variables d'environnement
+const API_URL = 'https://forfeo-supply-api.onrender.com';
 
 function App() {
   const [products, setProducts] = useState([]);
@@ -11,12 +10,11 @@ function App() {
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
-    // On log l'URL pour être sûr dans la console
-    console.log("Appel API vers :", `${API_URL}/api/products`);
+    // Petit log pour vérifier dans la console que l'adresse est bonne
+    console.log("Tentative de connexion vers :", `${API_URL}/api/products`);
 
     fetch(`${API_URL}/api/products`)
       .then(res => {
-        // Si l'API renvoie une erreur (ex: 404 ou 500)
         if (!res.ok) throw new Error(`Erreur HTTP: ${res.status}`);
         return res.json();
       })
@@ -26,12 +24,13 @@ function App() {
       })
       .catch(err => {
         console.error("Erreur Fetch:", err);
-        setMsg(`Erreur de connexion : ${err.message}`);
+        setMsg(`Erreur : Impossible de joindre le serveur. (${err.message})`);
         setLoading(false);
       });
   }, []);
 
   const commander = (id) => {
+    setMsg('Traitement en cours...');
     fetch(`${API_URL}/api/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -46,22 +45,22 @@ function App() {
     <div style={{ padding: 20, fontFamily: 'sans-serif', maxWidth: 800, margin: '0 auto' }}>
       <h1 style={{ color: '#2E7D32' }}>Forfeo Supply 🌱</h1>
       
-      {msg && <div style={{ padding: 10, background: '#e3f2fd', marginBottom: 20, borderRadius: 4 }}>{msg}</div>}
+      {msg && <div style={{ padding: 15, background: '#e3f2fd', marginBottom: 20, borderRadius: 8, border: '1px solid #90caf9' }}>{msg}</div>}
       
       {loading ? (
-        <p>Chargement des produits...</p>
+        <p>Chargement du catalogue...</p>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 20 }}>
           {products.map(p => (
-            <div key={p.id} style={{ border: '1px solid #ddd', padding: 15, borderRadius: 8 }}>
-              <span style={{ fontSize: 12, background: '#eee', padding: '2px 6px', borderRadius: 4 }}>{p.category}</span>
-              <h3>{p.name}</h3>
-              <p style={{ color: '#666' }}>{p.producer}</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-                <strong>{p.price} $</strong>
+            <div key={p.id} style={{ border: '1px solid #ddd', padding: 15, borderRadius: 8, backgroundColor: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+              <span style={{ fontSize: 12, background: '#e8f5e9', padding: '4px 8px', borderRadius: 12, color: '#2e7d32', fontWeight: 'bold' }}>{p.category}</span>
+              <h3 style={{ margin: '10px 0 5px 0' }}>{p.name}</h3>
+              <p style={{ color: '#666', fontSize: '0.9em', margin: 0 }}>{p.producer}</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 15 }}>
+                <strong style={{ fontSize: '1.1em' }}>{p.price} $</strong>
                 <button 
                   onClick={() => commander(p.id)}
-                  style={{ background: '#2E7D32', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 4, cursor: 'pointer' }}
+                  style={{ background: '#2E7D32', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' }}
                 >
                   Commander
                 </button>
