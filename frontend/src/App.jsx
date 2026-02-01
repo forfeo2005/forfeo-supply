@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 
-// Récupération automatique de l'URL du backend via Render
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// CORRECTION : Render donne le "host" sans le protocole.
+// On vérifie si l'URL commence par http, sinon on ajoute https://
+const RAW_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = RAW_URL.startsWith('http') ? RAW_URL : `https://${RAW_URL}`;
 
 function App() {
   const [products, setProducts] = useState([]);
@@ -9,15 +11,22 @@ function App() {
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
-    // Appel au backend (qui lui appelle Supabase)
+    // On log l'URL pour être sûr dans la console
+    console.log("Appel API vers :", `${API_URL}/api/products`);
+
     fetch(`${API_URL}/api/products`)
-      .then(res => res.json())
+      .then(res => {
+        // Si l'API renvoie une erreur (ex: 404 ou 500)
+        if (!res.ok) throw new Error(`Erreur HTTP: ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         setProducts(data);
         setLoading(false);
       })
       .catch(err => {
-        console.error(err);
+        console.error("Erreur Fetch:", err);
+        setMsg(`Erreur de connexion : ${err.message}`);
         setLoading(false);
       });
   }, []);
