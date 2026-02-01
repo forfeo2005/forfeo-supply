@@ -1,70 +1,55 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 // Import des composants
 import Header from './components/Header';
+import Footer from './components/Footer'; // <--- NOUVEAU : Import du Footer
 import Home from './pages/Home';
 import Marketplace from './pages/Marketplace';
 import About from './pages/About';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard'; // <--- NOUVEAU
+import Dashboard from './pages/Dashboard';
+import Privacy from './pages/Privacy'; // <--- NOUVEAU : Import de la page Loi 25
+
+// Création d'un Layout standard pour les pages publiques
+// Cela permet d'avoir le Header en haut et le Footer en bas sur toutes ces pages
+const Layout = ({ children }) => (
+  <div className="flex flex-col min-h-screen">
+    {/* On utilise le composant Header.jsx qui gère le design transparent/blanc */}
+    <Header /> 
+    
+    <main className="flex-grow">
+      {children}
+    </main>
+    
+    <Footer />
+  </div>
+);
 
 function App() {
   return (
     <Router>
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
         
-        {/* On peut conditionner l'affichage du Header global ici plus tard */}
-        {/* Pour l'instant, on l'affiche partout sauf si on est dans le Dashboard qui a son propre header */}
         <Routes>
-          <Route path="/dashboard" element={<Dashboard />} /> {/* Dashboard sans le header public */}
+          {/* 1. ROUTE DASHBOARD (Isolée) */}
+          {/* Le Dashboard garde son propre affichage sans le Header/Footer public */}
+          <Route path="/dashboard" element={<Dashboard />} />
           
-          {/* Toutes les autres pages avec le Header public */}
-          <Route path="*" element={
-            <>
-              <HeaderWrapper />
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/market" element={<Marketplace />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/login" element={<Login />} />
-              </Routes>
-            </>
-          } />
+          {/* 2. ROUTES PUBLIQUES (Avec Layout) */}
+          {/* Toutes ces pages auront le Header et le Footer automatiquement */}
+          <Route path="/" element={<Layout><Home /></Layout>} />
+          <Route path="/market" element={<Layout><Marketplace /></Layout>} />
+          <Route path="/about" element={<Layout><About /></Layout>} />
+          <Route path="/login" element={<Layout><Login /></Layout>} />
+          
+          {/* Nouvelle route pour la conformité légale */}
+          <Route path="/privacy" element={<Layout><Privacy /></Layout>} />
         </Routes>
 
       </div>
     </Router>
   );
 }
-
-// Petit composant pour garder le code propre (Header Public)
-const HeaderWrapper = () => (
-  <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="flex justify-between h-16">
-        <div className="flex items-center">
-          <Link to="/" className="flex-shrink-0 flex items-center gap-2">
-            <span className="text-2xl">🌱</span>
-            <span className="font-bold text-xl text-forfeo-700 tracking-tight">Forfeo Supply</span>
-          </Link>
-          <div className="hidden sm:ml-8 sm:flex sm:space-x-8">
-            <Link to="/" className="text-slate-600 hover:text-forfeo-600 px-3 py-2 text-sm font-medium transition">Accueil</Link>
-            <Link to="/market" className="text-slate-600 hover:text-forfeo-600 px-3 py-2 text-sm font-medium transition">Le Marché</Link>
-            <Link to="/about" className="text-slate-600 hover:text-forfeo-600 px-3 py-2 text-sm font-medium transition">À Propos</Link>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <Link to="/login" className="text-slate-500 hover:text-forfeo-600 font-medium text-sm">
-            Se connecter
-          </Link>
-          <Link to="/market" className="bg-forfeo-600 hover:bg-forfeo-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition transform hover:-translate-y-0.5">
-            Commander
-          </Link>
-        </div>
-      </div>
-    </div>
-  </nav>
-);
 
 export default App;
