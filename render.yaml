@@ -17,7 +17,7 @@ services:
   - type: web
     name: forfeo-supply-web
     env: static
-    plan: free
+    # J'ai supprimé la ligne "plan: free" ici car elle causait l'erreur
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
