@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #f8fafc; /* Gris très pâle et moderne (Slate-50) */
+  color: #0f172a; /* Texte presque noir (Slate-900) pour la lisibilité */
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Effets de verre pour les cartes modernes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
