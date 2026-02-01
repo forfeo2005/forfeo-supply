@@ -8,9 +8,13 @@ export default {
     extend: {
       colors: {
         forfeo: {
-          light: '#4caf50',
-          DEFAULT: '#2E7D32', // Notre vert signature
-          dark: '#1b5e20',
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          500: '#22c55e',
+          600: '#16a34a',
+          DEFAULT: '#15803d', // Vert professionnel
+          800: '#166534',
+          900: '#14532d',
         }
       }
     },
