@@ -4,7 +4,7 @@ services:
     name: forfeo-supply-api
     env: node
     plan: free
-    root: backend
+    rootDir: backend
     buildCommand: npm install
     startCommand: node src/index.js
     envVars:
@@ -18,7 +18,7 @@ services:
     name: forfeo-supply-web
     env: static
     plan: free
-    root: frontend
+    rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     routes:
