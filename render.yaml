@@ -30,4 +30,4 @@ services:
         fromService:
           type: web
           name: forfeo-supply-api
-          property: url
+          property: host
