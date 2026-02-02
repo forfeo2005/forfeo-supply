@@ -12,7 +12,7 @@ const Dashboard = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // PROFIL FOURNISSEUR (Nouveau : pour l'adresse de départ)
+  // PROFIL FOURNISSEUR (Pour l'adresse de départ)
   const [profile, setProfile] = useState({
     company_name: '', address_line1: '', city: '', state: 'QC', postal_code: '', phone: ''
   });
@@ -44,7 +44,7 @@ const Dashboard = () => {
       
     if (productsData) setProducts(productsData);
 
-    // 2. Charger les commandes (AMÉLIORÉ : On récupère l'adresse de l'acheteur)
+    // 2. Charger les commandes (Avec infos acheteur)
     const { data: ordersData, error } = await supabase
       .from('orders')
       .select(`
@@ -62,7 +62,7 @@ const Dashboard = () => {
     if (error) console.error("Erreur commandes:", error);
     if (ordersData) setOrders(ordersData);
 
-    // 3. Charger le Profil Fournisseur (NOUVEAU)
+    // 3. Charger le Profil Fournisseur
     const { data: profileData } = await supabase
       .from('profiles').select('*').eq('id', userId).single();
     if (profileData) {
@@ -122,17 +122,47 @@ const Dashboard = () => {
     else fetchData(user.id);
   };
 
-  // --- ACTION ÉTIQUETTE (NOUVEAU) ---
-  const handlePrintLabel = (order) => {
+  // --- ACTION ÉTIQUETTE (CONNECTÉE AU BACKEND) ---
+  const handlePrintLabel = async (order) => {
+    // 1. Vérification des adresses
     if (!profile.address_line1 || !order.buyer?.address_line1) {
       alert("⚠️ Impossible de générer l'étiquette.\n\nVérifiez que VOTRE adresse (onglet Paramètres) et l'adresse du CLIENT sont complètes.");
       return;
     }
-    // Simulation (en attendant Shippo)
-    alert(`🖨️ Simulation d'impression...\n\nDépart: ${profile.city}\nArrivée: ${order.buyer.city}\nArticles: ${order.items.length}`);
+
+    const confirmPrint = confirm("Générer une étiquette de livraison avec Shippo ?");
+    if (!confirmPrint) return;
+
+    try {
+      // 2. Définition de l'URL du backend (Local ou Prod)
+      // Vite remplacera VITE_API_URL lors du build sur Render
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+      // 3. Appel au serveur Node.js
+      const response = await fetch(`${API_URL}/api/create-label`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: order.id })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || "Erreur serveur");
+
+      // 4. Succès : Ouverture du PDF + Mise à jour statut
+      alert(`✅ Étiquette générée !\nSuivi : ${data.tracking_number}`);
+      window.open(data.label_url, '_blank'); // Ouvre le PDF dans un nouvel onglet
+      
+      // On passe la commande en "Expédiée" automatiquement
+      updateOrderStatus(order.id, 'shipped');
+
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de la création : " + err.message);
+    }
   };
 
-  // --- SAUVEGARDE PROFIL (NOUVEAU) ---
+  // --- SAUVEGARDE PROFIL ---
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     setSavingProfile(true);
