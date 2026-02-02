@@ -10,7 +10,8 @@ import About from './pages/About';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Privacy from './pages/Privacy';
-import MerchantDashboard from './pages/MerchantDashboard'; // <--- NOUVEAU
+import MerchantDashboard from './pages/MerchantDashboard';
+import AdminDashboard from './pages/AdminDashboard'; // <--- NOUVEAU : Import du Dashboard Admin
 
 // Création d'un Layout standard pour les pages publiques
 // Cela permet d'avoir le Header en haut et le Footer en bas sur toutes ces pages
@@ -35,8 +36,9 @@ function App() {
         <Routes>
           {/* 1. ROUTES DASHBOARD (Isolées) */}
           {/* Ces pages ont leur propre affichage sans le Header/Footer public */}
+          <Route path="/admin" element={<AdminDashboard />} /> {/* <--- NOUVELLE ROUTE ADMIN */}
           <Route path="/dashboard" element={<Dashboard />} /> {/* Espace Fournisseur */}
-          <Route path="/merchant" element={<MerchantDashboard />} /> {/* Espace Acheteur (NOUVEAU) */}
+          <Route path="/merchant" element={<MerchantDashboard />} /> {/* Espace Acheteur */}
           
           {/* 2. ROUTES PUBLIQUES (Avec Layout) */}
           {/* Toutes ces pages auront le Header et le Footer automatiquement */}
