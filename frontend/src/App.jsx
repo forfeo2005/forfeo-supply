@@ -11,7 +11,8 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Privacy from './pages/Privacy';
 import MerchantDashboard from './pages/MerchantDashboard';
-import AdminDashboard from './pages/AdminDashboard'; // <--- NOUVEAU : Import du Dashboard Admin
+import AdminDashboard from './pages/AdminDashboard';
+import Cart from './pages/Cart'; // <--- NOUVEAU : Import du Panier
 
 // Création d'un Layout standard pour les pages publiques
 // Cela permet d'avoir le Header en haut et le Footer en bas sur toutes ces pages
@@ -36,7 +37,7 @@ function App() {
         <Routes>
           {/* 1. ROUTES DASHBOARD (Isolées) */}
           {/* Ces pages ont leur propre affichage sans le Header/Footer public */}
-          <Route path="/admin" element={<AdminDashboard />} /> {/* <--- NOUVELLE ROUTE ADMIN */}
+          <Route path="/admin" element={<AdminDashboard />} /> {/* Route Admin */}
           <Route path="/dashboard" element={<Dashboard />} /> {/* Espace Fournisseur */}
           <Route path="/merchant" element={<MerchantDashboard />} /> {/* Espace Acheteur */}
           
@@ -46,6 +47,9 @@ function App() {
           <Route path="/market" element={<Layout><Marketplace /></Layout>} />
           <Route path="/about" element={<Layout><About /></Layout>} />
           <Route path="/login" element={<Layout><Login /></Layout>} />
+          
+          {/* 3. ROUTE PANIER (Accessible via le Layout standard) */}
+          <Route path="/cart" element={<Layout><Cart /></Layout>} />
           
           {/* Route pour la conformité légale */}
           <Route path="/privacy" element={<Layout><Privacy /></Layout>} />
