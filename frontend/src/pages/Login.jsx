@@ -8,7 +8,7 @@ const Login = () => {
   // --- ÉTATS ---
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false); // Bascule Connexion / Inscription
-  const [selectedRole, setSelectedRole] = useState(null); // 'merchant' ou 'supplier' ou null (pas encore choisi)
+  const [selectedRole, setSelectedRole] = useState(null); // 'merchant' ou 'supplier' ou null
 
   // Données formulaire
   const [email, setEmail] = useState('');
@@ -30,12 +30,12 @@ const Login = () => {
 
     try {
       if (isSignUp) {
-        // INSCRIPTION
+        // --- INSCRIPTION ---
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { role: selectedRole } // On utilise le rôle choisi à l'étape 1
+            data: { role: selectedRole } // On stocke le rôle choisi
           }
         });
 
@@ -48,7 +48,8 @@ const Login = () => {
             .upsert({ 
               id: data.user.id,
               role: selectedRole,
-              email: email
+              email: email,
+              status: 'pending' // Par défaut, en attente d'approbation
             });
             
           if (profileError) console.error("Erreur profil:", profileError);
@@ -62,7 +63,7 @@ const Login = () => {
         }
 
       } else {
-        // CONNEXION
+        // --- CONNEXION ---
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -70,15 +71,17 @@ const Login = () => {
 
         if (error) throw error;
 
-        // Vérification du rôle
+        // Vérification du rôle en base de données
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', data.user.id)
           .single();
 
-        // Redirection selon le profil trouvé en base
-        if (profile?.role === 'supplier') {
+        // --- LOGIQUE DE REDIRECTION (AVEC ADMIN) ---
+        if (profile?.role === 'admin') {
+           navigate('/admin'); // <--- Redirection vers le Portail Admin
+        } else if (profile?.role === 'supplier') {
           navigate('/dashboard');
         } else {
           navigate('/merchant');
@@ -192,8 +195,6 @@ const Login = () => {
                 value={password} onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-
-            {/* Note : Plus de sélecteur de rôle ici, car c'est déjà choisi */}
 
             <button 
               type="submit" 
