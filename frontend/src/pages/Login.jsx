@@ -59,9 +59,10 @@ const Login = () => {
 
         // LOGIQUE DE REDIRECTION INTELLIGENTE
         if (profile?.role === 'supplier') {
-          navigate('/dashboard'); // Vers le tableau de bord Vendeur (à créer)
+          navigate('/dashboard'); // Vers le tableau de bord Vendeur
         } else {
-          navigate('/market'); // Vers le marché Acheteur
+          // MODIFICATION ICI : On redirige les acheteurs vers leur nouveau dashboard
+          navigate('/merchant'); 
         }
       }
     } catch (error) {
