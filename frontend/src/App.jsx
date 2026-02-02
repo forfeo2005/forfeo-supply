@@ -3,13 +3,14 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 // Import des composants
 import Header from './components/Header';
-import Footer from './components/Footer'; // <--- NOUVEAU : Import du Footer
+import Footer from './components/Footer';
 import Home from './pages/Home';
 import Marketplace from './pages/Marketplace';
 import About from './pages/About';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Privacy from './pages/Privacy'; // <--- NOUVEAU : Import de la page Loi 25
+import Privacy from './pages/Privacy';
+import MerchantDashboard from './pages/MerchantDashboard'; // <--- NOUVEAU
 
 // Création d'un Layout standard pour les pages publiques
 // Cela permet d'avoir le Header en haut et le Footer en bas sur toutes ces pages
@@ -32,9 +33,10 @@ function App() {
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
         
         <Routes>
-          {/* 1. ROUTE DASHBOARD (Isolée) */}
-          {/* Le Dashboard garde son propre affichage sans le Header/Footer public */}
-          <Route path="/dashboard" element={<Dashboard />} />
+          {/* 1. ROUTES DASHBOARD (Isolées) */}
+          {/* Ces pages ont leur propre affichage sans le Header/Footer public */}
+          <Route path="/dashboard" element={<Dashboard />} /> {/* Espace Fournisseur */}
+          <Route path="/merchant" element={<MerchantDashboard />} /> {/* Espace Acheteur (NOUVEAU) */}
           
           {/* 2. ROUTES PUBLIQUES (Avec Layout) */}
           {/* Toutes ces pages auront le Header et le Footer automatiquement */}
@@ -43,7 +45,7 @@ function App() {
           <Route path="/about" element={<Layout><About /></Layout>} />
           <Route path="/login" element={<Layout><Login /></Layout>} />
           
-          {/* Nouvelle route pour la conformité légale */}
+          {/* Route pour la conformité légale */}
           <Route path="/privacy" element={<Layout><Privacy /></Layout>} />
         </Routes>
 
