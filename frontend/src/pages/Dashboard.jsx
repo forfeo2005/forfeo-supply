@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 import { jsPDF } from "jspdf"; 
 import { Menu, X, Package, ShoppingCart, Settings, Trash2, Plus, LogOut, TrendingUp, Printer, FileText, Users, Image as ImageIcon } from 'lucide-react';
 
-// BANQUE D'IMAGES STANDARD (URLs fiables)
+// BANQUE D'IMAGES STANDARD
 const STOCK_IMAGES = {
   default: 'https://images.unsplash.com/photo-1595246140625-573b715d11dc?w=400&q=80',
   vegetables: 'https://images.unsplash.com/photo-1566385101042-1a0aa0c1268c?w=400&q=80',
@@ -29,7 +29,6 @@ const Dashboard = () => {
   const [savingProfile, setSavingProfile] = useState(false);
 
   const [showAddForm, setShowAddForm] = useState(false);
-  // Ajout du champ image_type
   const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', category: 'Alimentaire', unit: 'kg', image_type: 'vegetables' });
 
   useEffect(() => {
@@ -56,8 +55,7 @@ const Dashboard = () => {
     const { data: ordersData } = await supabase.from('orders').select(`*, buyer: profiles (id, email, company_name, address_line1, city, phone), items: order_items (quantity, price_at_purchase, product: products (name, unit))`).eq('supplier_id', userId).order('created_at', { ascending: false });
     if (ordersData) {
       setOrders(ordersData);
-      
-      // 4. Extraire Clients Uniques
+      // Extraire Clients Uniques
       const uniqueClients = [];
       const map = new Map();
       for (const order of ordersData) {
@@ -75,8 +73,6 @@ const Dashboard = () => {
   const handleAddProduct = async (e) => {
     e.preventDefault();
     const producerName = profile.company_name || user.email || "Fournisseur";
-    
-    // On sauvegarde l'URL de l'image choisie
     const imageUrl = STOCK_IMAGES[newProduct.image_type] || STOCK_IMAGES.default;
 
     const { error } = await supabase.from('products').insert([{
@@ -88,7 +84,7 @@ const Dashboard = () => {
         unit: newProduct.unit,
         active: true,
         producer: producerName,
-        image_url: imageUrl // SAUVEGARDE DE L'IMAGE
+        image_url: imageUrl // SAUVEGARDE IMAGE
     }]);
 
     if (error) alert('Erreur: ' + error.message);
@@ -102,9 +98,7 @@ const Dashboard = () => {
   const deleteProduct = async (id) => {
     if(!confirm("Supprimer ?")) return;
     const { error } = await supabase.from('products').delete().eq('id', id);
-    if(error) { // Si échec (clé étrangère), on archive
-       await supabase.from('products').update({ active: false }).eq('id', id);
-    }
+    if(error) { await supabase.from('products').update({ active: false }).eq('id', id); }
     fetchData(user.id);
   };
 
@@ -113,7 +107,7 @@ const Dashboard = () => {
     const TPS = 0.05, TVQ = 0.09975;
     
     doc.setFontSize(20); doc.text("FACTURE", 150, 20);
-    doc.setFontSize(10); doc.text(order.payment_term === 'pay_now' ? "PAYÉ (Escompte 2%)" : "NET 30 JOURS", 150, 28); // Statut paiement
+    doc.setFontSize(10); doc.text(order.payment_term === 'pay_now' ? "PAYÉ (Escompte 2%)" : "NET 30 JOURS", 150, 28);
 
     doc.setFontSize(12); doc.text(`Fournisseur: ${profile.company_name || user.email}`, 20, 20);
     doc.line(20, 35, 190, 35);
@@ -153,8 +147,6 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex text-slate-900">
-      
-      {/* SIDEBAR */}
       <aside className={`fixed inset-y-0 left-0 z-20 w-72 bg-slate-900 text-slate-300 transform transition-transform duration-300 md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:static md:flex md:flex-col shadow-xl`}>
         <div className="p-8 border-b border-slate-800 hidden md:block"><h2 className="font-bold text-xl text-white">Forfeo Supply</h2></div>
         <nav className="flex-1 p-4 space-y-2 mt-20 md:mt-4">
@@ -167,9 +159,7 @@ const Dashboard = () => {
         <div className="p-6 border-t border-slate-800"><button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-900/30 text-red-400 rounded-xl transition text-sm">Déconnexion</button></div>
       </aside>
 
-      {/* CONTENU */}
       <main className="flex-1 p-4 md:p-8 pt-20 md:pt-8 overflow-y-auto h-screen">
-        
         {activeTab === 'overview' && (
           <div className="max-w-6xl mx-auto">
             <h1 className="text-3xl font-bold mb-8">Bonjour, {profile.company_name || 'Partenaire'} 👋</h1>
@@ -181,11 +171,9 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* ONGLETS PRODUITS AVEC IMAGES */}
         {activeTab === 'products' && (
           <div className="max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-8"><h1 className="text-2xl font-bold">Mon Inventaire</h1><button onClick={() => setShowAddForm(true)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex gap-2"><Plus size={20}/> Ajouter</button></div>
-            
             {showAddForm && (
               <div className="bg-white p-6 rounded-xl shadow-sm mb-8 animate-fade-in">
                 <form onSubmit={handleAddProduct} className="grid md:grid-cols-2 gap-4">
@@ -201,7 +189,7 @@ const Dashboard = () => {
                         <div key={type} onClick={() => setNewProduct({...newProduct, image_type: type})} 
                              className={`cursor-pointer border-2 rounded-xl overflow-hidden min-w-[80px] h-20 relative ${newProduct.image_type === type ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-slate-100'}`}>
                            <img src={STOCK_IMAGES[type]} className="w-full h-full object-cover" alt={type} />
-                           <p className="absolute bottom-0 w-full bg-black/50 text-white text-[10px] text-center">{type}</p>
+                           <p className="absolute bottom-0 w-full bg-black/50 text-white text-[10px] text-center capitalize">{type}</p>
                         </div>
                       ))}
                     </div>
@@ -212,51 +200,16 @@ const Dashboard = () => {
                 </form>
               </div>
             )}
-
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden"><table className="w-full text-left"><thead><tr className="bg-slate-50"><th className="p-4">Image</th><th className="p-4">Produit</th><th className="p-4">Prix</th><th className="p-4">Stock</th><th className="p-4">Action</th></tr></thead><tbody>{products.map(p => (<tr key={p.id} className="border-t">
-              <td className="p-4"><img src={p.image_url || STOCK_IMAGES.default} className="w-12 h-12 rounded-lg object-cover" alt="prod"/></td>
-              <td className="p-4 font-bold">{p.name}</td><td className="p-4">{p.price}$</td><td className="p-4">{p.stock}</td><td className="p-4"><button onClick={() => deleteProduct(p.id)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 size={18}/></button></td></tr>))}</tbody></table></div>
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden"><table className="w-full text-left"><thead><tr className="bg-slate-50"><th className="p-4">Img</th><th className="p-4">Produit</th><th className="p-4">Prix</th><th className="p-4">Stock</th><th className="p-4">Action</th></tr></thead><tbody>{products.map(p => (<tr key={p.id} className="border-t"><td className="p-4"><img src={p.image_url || STOCK_IMAGES.default} className="w-10 h-10 rounded object-cover"/></td><td className="p-4 font-bold">{p.name}</td><td className="p-4">{p.price}$</td><td className="p-4">{p.stock}</td><td className="p-4"><button onClick={() => deleteProduct(p.id)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 size={18}/></button></td></tr>))}</tbody></table></div>
           </div>
         )}
 
-        {/* COMMANDES AVEC INFO PAIEMENT */}
         {activeTab === 'orders' && (
-          <div className="max-w-6xl mx-auto"><h1 className="text-2xl font-bold mb-8">Commandes</h1><div className="space-y-4">{orders.length === 0 ? <p>Aucune commande.</p> : orders.map(o => (
-            <div key={o.id} className="bg-white p-6 rounded-xl shadow-sm border flex flex-col md:flex-row justify-between items-center gap-4">
-              <div>
-                <span className="font-bold">#{o.id.slice(0,8)}</span> 
-                <span className="ml-2 text-sm text-slate-500">{o.buyer?.company_name || o.buyer?.email}</span>
-                <div className="mt-1 flex items-center gap-2">
-                   {o.payment_term === 'pay_now' ? <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-1 rounded">Payé (Escompte 2%)</span> : <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded">Net 30 Jours</span>}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => generateInvoice(o)} className="bg-slate-100 px-3 py-2 rounded text-sm font-bold flex gap-2"><FileText size={16}/> Facture</button>
-                {o.status === 'confirmed' && <button onClick={() => handlePrintLabel(o)} className="bg-slate-800 text-white px-3 py-2 rounded text-sm font-bold flex gap-2"><Printer size={16}/> Étiquette</button>}
-              </div>
-            </div>))}</div></div>
+          <div className="max-w-6xl mx-auto"><h1 className="text-2xl font-bold mb-8">Commandes</h1><div className="space-y-4">{orders.map(o => (<div key={o.id} className="bg-white p-6 rounded-xl shadow-sm border flex flex-col md:flex-row justify-between items-center gap-4"><div><span className="font-bold">#{o.id.slice(0,8)}</span> <span className="ml-2 text-sm text-slate-500">{o.buyer?.company_name}</span><div className="mt-1">{o.payment_term === 'pay_now' ? <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded">Payé (Escompte)</span> : <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">Net 30 Jours</span>}</div></div><div className="flex gap-2"><button onClick={() => generateInvoice(o)} className="bg-slate-100 px-3 py-2 rounded text-sm font-bold flex gap-2"><FileText size={16}/> Facture</button>{o.status === 'confirmed' && <button onClick={() => handlePrintLabel(o)} className="bg-slate-800 text-white px-3 py-2 rounded text-sm font-bold flex gap-2"><Printer size={16}/> Étiquette</button>}</div></div>))}</div></div>
         )}
 
-        {/* NOUVEL ONGLET CLIENTS */}
         {activeTab === 'clients' && (
-          <div className="max-w-6xl mx-auto">
-            <h1 className="text-2xl font-bold mb-8">Mes Clients</h1>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clients.map(c => (
-                <div key={c.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="h-12 w-12 bg-emerald-100 rounded-full flex items-center justify-center text-xl">🏢</div>
-                    <div><h3 className="font-bold text-slate-800">{c.company_name || 'Entreprise'}</h3><p className="text-xs text-slate-500">{c.email}</p></div>
-                  </div>
-                  <div className="text-sm text-slate-600">
-                    <p>📍 {c.city || 'Ville inconnue'}</p>
-                    <p>📞 {c.phone || '--'}</p>
-                  </div>
-                </div>
-              ))}
-              {clients.length === 0 && <p className="text-slate-500">Aucun client pour le moment.</p>}
-            </div>
-          </div>
+          <div className="max-w-6xl mx-auto"><h1 className="text-2xl font-bold mb-8">Mes Clients</h1><div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">{clients.map(c => (<div key={c.id} className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition"><div className="flex items-center gap-4 mb-4"><div className="h-12 w-12 bg-emerald-100 rounded-full flex items-center justify-center text-xl">🏢</div><div><h3 className="font-bold text-slate-800">{c.company_name || 'Entreprise'}</h3><p className="text-xs text-slate-500">{c.email}</p></div></div><div className="text-sm text-slate-600"><p>📍 {c.city || 'Ville inconnue'}</p><p>📞 {c.phone || '--'}</p></div></div>))}</div></div>
         )}
 
         {activeTab === 'settings' && <div className="max-w-2xl mx-auto"><div className="bg-white p-8 rounded-xl shadow-sm"><form onSubmit={handleSaveProfile} className="space-y-4"><input type="text" placeholder="Nom Entreprise" className="w-full p-3 border rounded" value={profile.company_name} onChange={e => setProfile({...profile, company_name: e.target.value})} /><button type="submit" disabled={savingProfile} className="w-full bg-emerald-600 text-white p-3 rounded font-bold">Sauvegarder</button></form></div></div>}
