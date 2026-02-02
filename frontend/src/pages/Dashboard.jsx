@@ -4,21 +4,119 @@ import { supabase } from '../supabase';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview'); // Gestion des onglets
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('products'); // Vue par défaut : Ma Boutique
+  const [user, setUser] = useState(null);
   
-  // États pour les données (Simulation pour l'instant)
-  const [products, setProducts] = useState([
-    { id: 1, name: 'Carottes des Sables', price: 2.50, stock: 150, status: 'active' },
-    { id: 2, name: 'Sirop d\'Érable Doré', price: 12.00, stock: 45, status: 'active' },
-  ]);
+  // Données
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [orders, setOrders] = useState([
-    { id: 101, client: 'Resto Le Saint-Amour', total: 245.50, status: 'En attente', date: '2026-02-01' },
-    { id: 102, client: 'Bureau Ubisoft', total: 89.00, status: 'Livré', date: '2026-01-29' },
-  ]);
+  // Gestion du Formulaire Ajout Produit (Modal)
+  const [showModal, setShowModal] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    category: 'Alimentaire',
+    price: '',
+    unit: 'unité',
+    stock: 0
+  });
 
-  // Déconnexion
+  // Gestion du Changement de Mot de Passe
+  const [passwords, setPasswords] = useState({ new: '', confirm: '' });
+  const [passwordMsg, setPasswordMsg] = useState('');
+
+  // 1. Initialisation
+  useEffect(() => {
+    const initData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return navigate('/login');
+      setUser(user);
+      fetchMyProducts(user.id);
+    };
+    initData();
+  }, [navigate]);
+
+  const fetchMyProducts = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('supplier_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error("Erreur chargement:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 2. Ajouter un produit
+  const handleAddProduct = async (e) => {
+    e.preventDefault();
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .insert([
+          {
+            name: newProduct.name,
+            category: newProduct.category,
+            price: parseFloat(newProduct.price),
+            unit: newProduct.unit,
+            stock: parseInt(newProduct.stock),
+            supplier_id: user.id,
+            producer: user.email.split('@')[0], // Nom temporaire
+            active: true
+          }
+        ]);
+
+      if (error) throw error;
+
+      setShowModal(false);
+      setNewProduct({ name: '', category: 'Alimentaire', price: '', unit: 'unité', stock: 0 });
+      fetchMyProducts(user.id);
+      alert("Produit ajouté avec succès ! 🚀");
+
+    } catch (error) {
+      alert("Erreur lors de l'ajout : " + error.message);
+    }
+  };
+
+  // 3. Changer le mot de passe
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    setPasswordMsg('');
+
+    if (passwords.new !== passwords.confirm) {
+      setPasswordMsg("❌ Les mots de passe ne correspondent pas.");
+      return;
+    }
+
+    if (passwords.new.length < 6) {
+      setPasswordMsg("❌ Le mot de passe doit faire au moins 6 caractères.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({ 
+        password: passwords.new 
+      });
+
+      if (error) throw error;
+
+      setPasswordMsg("✅ Mot de passe mis à jour avec succès !");
+      setPasswords({ new: '', confirm: '' });
+      
+    } catch (error) {
+      setPasswordMsg(`❌ Erreur : ${error.message}`);
+    }
+  };
+
+  // 4. Déconnexion
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/');
@@ -27,20 +125,18 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-slate-50 font-sans flex text-slate-900">
       
-      {/* --- SIDEBAR (Menu Latéral) --- */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col fixed h-full z-20">
+      {/* SIDEBAR */}
+      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col fixed h-full z-20 hidden md:flex">
         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
           <span className="text-2xl">⚡</span>
           <span className="font-bold text-white tracking-wide">Espace Pro</span>
         </div>
-
         <nav className="flex-1 p-4 space-y-2">
           <NavButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon="📊" label="Vue d'ensemble" />
           <NavButton active={activeTab === 'products'} onClick={() => setActiveTab('products')} icon="📦" label="Ma Boutique" />
           <NavButton active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} icon="🚚" label="Commandes" />
           <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon="⚙️" label="Paramètres" />
         </nav>
-
         <div className="p-4 border-t border-slate-800">
           <button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition text-sm font-medium">
             <span>🚪</span> Déconnexion
@@ -48,141 +144,225 @@ const Dashboard = () => {
         </div>
       </aside>
 
-      {/* --- CONTENU PRINCIPAL --- */}
-      <main className="flex-1 ml-64 p-8">
+      {/* CONTENU PRINCIPAL */}
+      <main className="flex-1 md:ml-64 p-4 md:p-8">
         
-        {/* Header Mobile/Tablet Check would go here */}
-        
-        {/* VUE : VUE D'ENSEMBLE */}
-        {activeTab === 'overview' && (
+        {/* --- VUE : MA BOUTIQUE --- */}
+        {activeTab === 'products' && (
           <div className="animate-fade-in">
-            <h1 className="text-2xl font-bold text-slate-900 mb-6">Bonjour, Partenaire 👋</h1>
-            
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <StatCard title="Ventes du mois" value="12,450 $" trend="+12%" color="bg-emerald-100 text-emerald-700" />
-              <StatCard title="Commandes à traiter" value="3" trend="Urgent" color="bg-orange-100 text-orange-700" />
-              <StatCard title="Produits actifs" value="24" trend="Stock OK" color="bg-blue-100 text-blue-700" />
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-2xl font-bold text-slate-900">Ma Boutique Locale</h1>
+              <button 
+                onClick={() => setShowModal(true)}
+                className="bg-forfeo-600 hover:bg-forfeo-700 text-white px-4 py-2 rounded-lg font-bold shadow-md transition flex items-center gap-2"
+              >
+                <span>+</span> Ajouter un produit
+              </button>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h2 className="font-bold mb-4">Dernières activités</h2>
-              <div className="space-y-4">
-                {orders.map(order => (
-                  <div key={order.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg transition">
-                    <div>
-                      <p className="font-medium text-slate-800">Commande #{order.id}</p>
-                      <p className="text-sm text-slate-500">{order.client}</p>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${order.status === 'Livré' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                      {order.status}
-                    </span>
-                  </div>
-                ))}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+                    <tr>
+                      <th className="p-4">Produit</th>
+                      <th className="p-4">Prix</th>
+                      <th className="p-4">Stock</th>
+                      <th className="p-4">État</th>
+                      <th className="p-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {loading ? (
+                      <tr><td colSpan="5" className="p-8 text-center text-slate-400">Chargement...</td></tr>
+                    ) : products.length === 0 ? (
+                      <tr><td colSpan="5" className="p-8 text-center text-slate-400">Aucun produit.</td></tr>
+                    ) : (
+                      products.map(p => (
+                        <tr key={p.id} className="hover:bg-slate-50 transition">
+                          <td className="p-4">
+                            <div className="font-medium text-slate-900">{p.name}</div>
+                            <div className="text-xs text-slate-500">{p.category}</div>
+                          </td>
+                          <td className="p-4 font-mono">{p.price} $ <span className="text-xs text-slate-400">/ {p.unit}</span></td>
+                          <td className="p-4">
+                            <span className={`font-bold ${p.stock < 10 ? 'text-red-500' : 'text-slate-700'}`}>
+                              {p.stock}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">En ligne</span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <button className="text-slate-400 hover:text-red-600 text-sm font-medium">Retirer</button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
 
-        {/* VUE : MA BOUTIQUE (Gestion Catalogue) */}
-        {activeTab === 'products' && (
-          <div className="animate-fade-in">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold text-slate-900">Ma Boutique Locale</h1>
-              <button className="bg-forfeo-600 hover:bg-forfeo-700 text-white px-4 py-2 rounded-lg font-bold shadow-md transition">
-                + Nouveau Produit
-              </button>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-                  <tr>
-                    <th className="p-4">Nom du produit</th>
-                    <th className="p-4">Prix</th>
-                    <th className="p-4">Stock</th>
-                    <th className="p-4">État</th>
-                    <th className="p-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {products.map(p => (
-                    <tr key={p.id} className="hover:bg-slate-50 transition">
-                      <td className="p-4 font-medium">{p.name}</td>
-                      <td className="p-4">{p.price.toFixed(2)} $</td>
-                      <td className="p-4">{p.stock} unités</td>
-                      <td className="p-4">
-                        <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Actif</span>
-                      </td>
-                      <td className="p-4 text-right space-x-2">
-                        <button className="text-slate-400 hover:text-blue-600 text-sm font-medium">Modifier</button>
-                        <button className="text-slate-400 hover:text-red-600 text-sm font-medium">Supprimer</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* VUE : COMMANDES */}
-        {activeTab === 'orders' && (
-          <div className="animate-fade-in">
-            <h1 className="text-2xl font-bold text-slate-900 mb-6">Gestion des Commandes</h1>
-            <div className="grid gap-4">
-              {orders.map(order => (
-                <div key={order.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="font-bold text-lg">Commande #{order.id}</h3>
-                      <span className="text-xs text-slate-400">{order.date}</span>
-                    </div>
-                    <p className="text-slate-600">Client : <span className="font-medium text-slate-900">{order.client}</span></p>
-                    <p className="text-emerald-600 font-bold mt-1">Total : {order.total} $</p>
-                  </div>
-                  
-                  <div className="flex gap-3">
-                    {order.status === 'En attente' && (
-                      <>
-                        <button className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg font-medium hover:bg-slate-50 transition">Refuser</button>
-                        <button className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-emerald-700 transition">Accepter</button>
-                      </>
-                    )}
-                    {order.status === 'Livré' && (
-                      <span className="text-slate-400 font-medium italic">Terminé</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* VUE : PARAMÈTRES (PROFIL) */}
+        {/* --- VUE : PARAMÈTRES (PROFIL & SÉCURITÉ) --- */}
         {activeTab === 'settings' && (
-          <div className="animate-fade-in max-w-2xl">
-             <h1 className="text-2xl font-bold text-slate-900 mb-6">Profil Entreprise</h1>
-             <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'entreprise</label>
-                  <input type="text" className="w-full p-3 border border-slate-200 rounded-lg" defaultValue="Ferme du Bonheur" />
+          <div className="animate-fade-in max-w-2xl space-y-8">
+             
+             {/* Section Profil */}
+             <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                <h2 className="text-xl font-bold text-slate-900 mb-6">Profil Entreprise</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'entreprise</label>
+                    <input type="text" className="w-full p-3 border border-slate-200 rounded-lg" defaultValue="Ma Super Entreprise" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                    <textarea className="w-full p-3 border border-slate-200 rounded-lg h-24" defaultValue="Description visible par les clients..." />
+                  </div>
+                  <button className="bg-slate-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-slate-800 transition">Enregistrer le profil</button>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Description (visible sur le Marché)</label>
-                  <textarea className="w-full p-3 border border-slate-200 rounded-lg h-32" defaultValue="Producteur local depuis 1998..." />
-                </div>
-                <button className="bg-slate-900 text-white px-6 py-3 rounded-lg font-bold">Enregistrer les modifications</button>
              </div>
+
+             {/* NOUVEAU : Section Sécurité (Mot de passe) */}
+             <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                  🔒 Sécurité
+                </h2>
+                
+                {passwordMsg && (
+                  <div className={`p-3 rounded-lg mb-4 text-sm font-medium ${passwordMsg.includes('✅') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {passwordMsg}
+                  </div>
+                )}
+
+                <form onSubmit={handleUpdatePassword} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Nouveau mot de passe</label>
+                    <input 
+                      type="password" 
+                      required
+                      className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-forfeo-500 outline-none" 
+                      placeholder="Minimum 6 caractères"
+                      value={passwords.new}
+                      onChange={e => setPasswords({...passwords, new: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Confirmer le mot de passe</label>
+                    <input 
+                      type="password" 
+                      required
+                      className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-forfeo-500 outline-none" 
+                      placeholder="Répétez le mot de passe"
+                      value={passwords.confirm}
+                      onChange={e => setPasswords({...passwords, confirm: e.target.value})}
+                    />
+                  </div>
+                  <button 
+                    type="submit" 
+                    className="bg-red-50 text-red-600 border border-red-100 px-6 py-2 rounded-lg font-bold hover:bg-red-100 transition"
+                  >
+                    Mettre à jour le mot de passe
+                  </button>
+                </form>
+             </div>
+
           </div>
         )}
+
+        {/* --- PLACEHOLDERS --- */}
+        {activeTab === 'overview' && <div className="p-10 text-center text-slate-400">Tableau de bord en construction... 🚧</div>}
+        {activeTab === 'orders' && <div className="p-10 text-center text-slate-400">Module de commandes à venir... 📦</div>}
 
       </main>
+
+      {/* --- MODAL AJOUT PRODUIT --- */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-lg text-slate-800">Ajouter un produit</h3>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+            </div>
+            
+            <form onSubmit={handleAddProduct} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nom</label>
+                <input 
+                  type="text" required placeholder="Ex: Café équitable" 
+                  className="w-full p-3 border border-slate-300 rounded-lg outline-none"
+                  value={newProduct.name}
+                  onChange={e => setNewProduct({...newProduct, name: e.target.value})}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Catégorie</label>
+                  <select 
+                    className="w-full p-3 border border-slate-300 rounded-lg outline-none"
+                    value={newProduct.category}
+                    onChange={e => setNewProduct({...newProduct, category: e.target.value})}
+                  >
+                    <option>Alimentaire</option>
+                    <option>Bureau</option>
+                    <option>Services</option>
+                    <option>Équipement</option>
+                    <option>Hôtellerie</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Stock</label>
+                  <input 
+                    type="number" required min="0"
+                    className="w-full p-3 border border-slate-300 rounded-lg outline-none"
+                    value={newProduct.stock}
+                    onChange={e => setNewProduct({...newProduct, stock: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Prix ($)</label>
+                  <input 
+                    type="number" required min="0" step="0.01"
+                    className="w-full p-3 border border-slate-300 rounded-lg outline-none"
+                    value={newProduct.price}
+                    onChange={e => setNewProduct({...newProduct, price: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Unité</label>
+                  <select 
+                    className="w-full p-3 border border-slate-300 rounded-lg outline-none"
+                    value={newProduct.unit}
+                    onChange={e => setNewProduct({...newProduct, unit: e.target.value})}
+                  >
+                    <option value="unité">Par unité</option>
+                    <option value="kg">Par kg</option>
+                    <option value="lb">Par livre</option>
+                    <option value="caisse">Par caisse</option>
+                    <option value="heure">Par heure</option>
+                  </select>
+                </div>
+              </div>
+
+              <button type="submit" className="w-full bg-forfeo-600 hover:bg-forfeo-700 text-white font-bold py-3 rounded-xl shadow-lg transition mt-4">
+                Publier
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
 
-// Composant Bouton Navigation
 const NavButton = ({ active, onClick, icon, label }) => (
   <button 
     onClick={onClick}
@@ -193,17 +373,6 @@ const NavButton = ({ active, onClick, icon, label }) => (
     <span>{icon}</span>
     <span>{label}</span>
   </button>
-);
-
-// Composant Carte Statistique
-const StatCard = ({ title, value, trend, color }) => (
-  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-    <p className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-2">{title}</p>
-    <div className="flex items-end justify-between">
-      <span className="text-3xl font-bold text-slate-800">{value}</span>
-      <span className={`text-xs font-bold px-2 py-1 rounded ${color}`}>{trend}</span>
-    </div>
-  </div>
 );
 
 export default Dashboard;
