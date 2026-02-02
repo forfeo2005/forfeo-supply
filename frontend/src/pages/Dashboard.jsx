@@ -9,8 +9,14 @@ const Dashboard = () => {
   
   // Données
   const [products, setProducts] = useState([]);
-  const [orders, setOrders] = useState([]); // <--- NOUVEAU : État pour les commandes
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // PROFIL FOURNISSEUR (Nouveau : pour l'adresse de départ)
+  const [profile, setProfile] = useState({
+    company_name: '', address_line1: '', city: '', state: 'QC', postal_code: '', phone: ''
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Formulaire d'ajout produit
   const [showAddForm, setShowAddForm] = useState(false);
@@ -38,14 +44,12 @@ const Dashboard = () => {
       
     if (productsData) setProducts(productsData);
 
-    // 2. Charger les commandes (NOUVEAU)
-    // On récupère la commande + les infos de l'acheteur (profiles)
-    // Note: On suppose que la table 'profiles' est accessible en lecture
+    // 2. Charger les commandes (AMÉLIORÉ : On récupère l'adresse de l'acheteur)
     const { data: ordersData, error } = await supabase
       .from('orders')
       .select(`
         *,
-        buyer: profiles (email, role),
+        buyer: profiles (email, role, company_name, address_line1, city, state, postal_code, phone),
         items: order_items (
           quantity,
           price_at_purchase,
@@ -57,6 +61,20 @@ const Dashboard = () => {
 
     if (error) console.error("Erreur commandes:", error);
     if (ordersData) setOrders(ordersData);
+
+    // 3. Charger le Profil Fournisseur (NOUVEAU)
+    const { data: profileData } = await supabase
+      .from('profiles').select('*').eq('id', userId).single();
+    if (profileData) {
+      setProfile({
+        company_name: profileData.company_name || '',
+        address_line1: profileData.address_line1 || '',
+        city: profileData.city || '',
+        state: profileData.state || 'QC',
+        postal_code: profileData.postal_code || '',
+        phone: profileData.phone || ''
+      });
+    }
     
     setLoading(false);
   };
@@ -83,7 +101,7 @@ const Dashboard = () => {
     } else {
       setShowAddForm(false);
       setNewProduct({ name: '', price: '', stock: '', category: 'Alimentaire', unit: 'kg' });
-      fetchData(user.id); // Recharger la liste
+      fetchData(user.id);
     }
   };
 
@@ -93,7 +111,7 @@ const Dashboard = () => {
     fetchData(user.id);
   };
 
-  // --- ACTIONS COMMANDES (NOUVEAU) ---
+  // --- ACTIONS COMMANDES ---
   const updateOrderStatus = async (orderId, newStatus) => {
     const { error } = await supabase
       .from('orders')
@@ -101,7 +119,27 @@ const Dashboard = () => {
       .eq('id', orderId);
 
     if (error) alert("Erreur mise à jour: " + error.message);
-    else fetchData(user.id); // Rafraîchir pour voir le changement
+    else fetchData(user.id);
+  };
+
+  // --- ACTION ÉTIQUETTE (NOUVEAU) ---
+  const handlePrintLabel = (order) => {
+    if (!profile.address_line1 || !order.buyer?.address_line1) {
+      alert("⚠️ Impossible de générer l'étiquette.\n\nVérifiez que VOTRE adresse (onglet Paramètres) et l'adresse du CLIENT sont complètes.");
+      return;
+    }
+    // Simulation (en attendant Shippo)
+    alert(`🖨️ Simulation d'impression...\n\nDépart: ${profile.city}\nArrivée: ${order.buyer.city}\nArticles: ${order.items.length}`);
+  };
+
+  // --- SAUVEGARDE PROFIL (NOUVEAU) ---
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    const { error } = await supabase.from('profiles').update(profile).eq('id', user.id);
+    if (error) alert("Erreur: " + error.message);
+    else alert("Profil mis à jour ! ✅");
+    setSavingProfile(false);
   };
 
   const handleLogout = async () => {
@@ -146,7 +184,6 @@ const Dashboard = () => {
           <NavButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon="📊" label="Vue d'ensemble" />
           <NavButton active={activeTab === 'products'} onClick={() => setActiveTab('products')} icon="📦" label="Ma Boutique" />
           
-          {/* Badge de notification sur l'onglet commandes */}
           <button 
             onClick={() => setActiveTab('orders')}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition font-medium ${
@@ -189,6 +226,17 @@ const Dashboard = () => {
               <StatCard title="Commandes en attente" value={orders.filter(o => o.status === 'pending').length} icon="⏳" color="bg-amber-100 text-amber-600" />
               <StatCard title="Produits actifs" value={products.length} icon="📦" color="bg-blue-100 text-blue-600" />
             </div>
+
+            {/* ALERTE ADRESSE MANQUANTE */}
+            {!profile.address_line1 && (
+              <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r shadow-sm flex justify-between items-center animate-pulse">
+                <div>
+                  <p className="font-bold text-amber-800">Configuration requise ⚠️</p>
+                  <p className="text-sm text-amber-700">Vous devez ajouter votre adresse d'expédition pour pouvoir imprimer des étiquettes.</p>
+                </div>
+                <button onClick={() => setActiveTab('settings')} className="bg-white text-amber-700 font-bold px-4 py-2 rounded shadow-sm hover:bg-amber-100">Configurer</button>
+              </div>
+            )}
           </div>
         )}
 
@@ -202,13 +250,12 @@ const Dashboard = () => {
               </button>
             </div>
 
-            {/* Formulaire Ajout (Modal simple) */}
+            {/* Formulaire Ajout */}
             {showAddForm && (
               <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 mb-8 animate-slide-up">
                 <h3 className="font-bold text-lg mb-4">Nouveau Produit</h3>
                 <form onSubmit={handleAddProduct} className="grid md:grid-cols-2 gap-4">
-                  <input type="text" placeholder="Nom du produit (ex: Carottes)" required 
-                    className="p-3 border rounded-xl bg-slate-50"
+                  <input type="text" placeholder="Nom du produit" required className="p-3 border rounded-xl bg-slate-50"
                     value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} 
                   />
                   <div className="flex gap-2">
@@ -217,10 +264,7 @@ const Dashboard = () => {
                     />
                     <select className="p-3 border rounded-xl bg-slate-50"
                       value={newProduct.unit} onChange={e => setNewProduct({...newProduct, unit: e.target.value})}>
-                      <option value="kg">/ kg</option>
-                      <option value="unité">/ unité</option>
-                      <option value="lb">/ lb</option>
-                      <option value="lit">/ litre</option>
+                      <option value="kg">/ kg</option><option value="unité">/ unité</option><option value="lb">/ lb</option><option value="lit">/ litre</option>
                     </select>
                   </div>
                   <input type="number" placeholder="Stock disponible" required className="p-3 border rounded-xl bg-slate-50"
@@ -228,9 +272,7 @@ const Dashboard = () => {
                   />
                   <select className="p-3 border rounded-xl bg-slate-50"
                     value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})}>
-                    <option value="Alimentaire">Alimentaire</option>
-                    <option value="Bureau">Bureau</option>
-                    <option value="Équipement">Équipement</option>
+                    <option value="Alimentaire">Alimentaire</option><option value="Bureau">Bureau</option><option value="Équipement">Équipement</option>
                   </select>
                   <div className="md:col-span-2 flex justify-end gap-3 mt-2">
                     <button type="button" onClick={() => setShowAddForm(false)} className="px-4 py-2 text-slate-500 font-bold">Annuler</button>
@@ -245,11 +287,7 @@ const Dashboard = () => {
               <table className="w-full text-left">
                 <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold tracking-wider">
                   <tr>
-                    <th className="p-4">Produit</th>
-                    <th className="p-4">Prix</th>
-                    <th className="p-4">Stock</th>
-                    <th className="p-4">État</th>
-                    <th className="p-4 text-right">Actions</th>
+                    <th className="p-4">Produit</th><th className="p-4">Prix</th><th className="p-4">Stock</th><th className="p-4">État</th><th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -272,7 +310,7 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* --- ONGLET : COMMANDES (NOUVEAU !!!) --- */}
+        {/* --- ONGLET : COMMANDES --- */}
         {activeTab === 'orders' && (
           <div className="animate-fade-in">
             <h1 className="text-3xl font-bold text-slate-900 mb-8">Gestion des Commandes</h1>
@@ -296,10 +334,11 @@ const Dashboard = () => {
                           <StatusBadge status={order.status} />
                         </div>
                         <div className="font-bold text-slate-900">
-                          Client : {order.buyer?.email || 'Utilisateur inconnu'}
+                          {order.buyer?.company_name || order.buyer?.email || 'Client inconnu'}
                         </div>
+                        {/* Affiche l'adresse si disponible */}
                         <div className="text-xs text-slate-500">
-                          {new Date(order.created_at).toLocaleDateString()} à {new Date(order.created_at).toLocaleTimeString()}
+                           {order.buyer?.city ? `📍 ${order.buyer.city}, ${order.buyer.state}` : 'Adresse non renseignée'}
                         </div>
                       </div>
                       
@@ -309,7 +348,7 @@ const Dashboard = () => {
                           <span className="font-mono text-xl font-bold text-slate-900">{order.total_amount}$</span>
                         </div>
                         
-                        {/* Actions de changement de statut */}
+                        {/* Actions */}
                         {order.status === 'pending' && (
                           <div className="flex gap-2">
                             <button onClick={() => updateOrderStatus(order.id, 'confirmed')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition">
@@ -317,10 +356,16 @@ const Dashboard = () => {
                             </button>
                           </div>
                         )}
+                        {/* Une fois confirmé, on peut imprimer et expédier */}
                         {order.status === 'confirmed' && (
-                          <button onClick={() => updateOrderStatus(order.id, 'shipped')} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition">
-                            Marquer Expédié 🚚
-                          </button>
+                          <div className="flex gap-2">
+                            <button onClick={() => handlePrintLabel(order)} className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition">
+                              <span>🖨️</span> Étiquette
+                            </button>
+                            <button onClick={() => updateOrderStatus(order.id, 'shipped')} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition">
+                              Expédier
+                            </button>
+                          </div>
                         )}
                         {order.status === 'shipped' && (
                           <button onClick={() => updateOrderStatus(order.id, 'delivered')} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition">
@@ -332,7 +377,6 @@ const Dashboard = () => {
 
                     {/* Détail des produits */}
                     <div className="p-6 bg-white">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-wider">Articles commandés</h4>
                       <ul className="space-y-3">
                         {order.items.map((item, idx) => (
                           <li key={idx} className="flex justify-between items-center border-b border-slate-50 pb-2 last:border-0 last:pb-0">
@@ -351,6 +395,44 @@ const Dashboard = () => {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        )}
+
+        {/* --- ONGLET : PARAMÈTRES (NOUVEAU) --- */}
+        {activeTab === 'settings' && (
+          <div className="animate-fade-in max-w-2xl">
+            <h1 className="text-2xl font-bold text-slate-900 mb-6">Paramètres Expédition</h1>
+            <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+              <form onSubmit={handleSaveProfile} className="space-y-6">
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Nom de l'entreprise</label>
+                    <input type="text" className="w-full p-3 border rounded-xl bg-slate-50" value={profile.company_name} onChange={e => setProfile({...profile, company_name: e.target.value})} placeholder="Ferme Exemple" />
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Adresse de départ (Expéditeur)</label>
+                    <input type="text" required className="w-full p-3 border rounded-xl bg-slate-50" value={profile.address_line1} onChange={e => setProfile({...profile, address_line1: e.target.value})} placeholder="123 Rang des Patates" />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="col-span-2 md:col-span-1">
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Ville</label>
+                      <input type="text" required className="w-full p-3 border rounded-xl bg-slate-50" value={profile.city} onChange={e => setProfile({...profile, city: e.target.value})} placeholder="Ville" />
+                  </div>
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Prov.</label>
+                      <select className="w-full p-3 border rounded-xl bg-slate-50" value={profile.state} onChange={e => setProfile({...profile, state: e.target.value})}>
+                          <option value="QC">QC</option><option value="ON">ON</option><option value="NB">NB</option>
+                      </select>
+                  </div>
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Code Postal</label>
+                      <input type="text" required className="w-full p-3 border rounded-xl bg-slate-50" value={profile.postal_code} onChange={e => setProfile({...profile, postal_code: e.target.value})} placeholder="A1A 1A1" />
+                  </div>
+                </div>
+                <button type="submit" disabled={savingProfile} className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-emerald-600 transition shadow-lg mt-4">
+                    {savingProfile ? '...' : 'Sauvegarder l\'adresse de départ'}
+                </button>
+              </form>
             </div>
           </div>
         )}
