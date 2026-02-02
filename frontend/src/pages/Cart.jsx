@@ -58,8 +58,7 @@ const Cart = () => {
           }]);
 
           // DIMINUTION DU STOCK (Magie ici !)
-          await supabase.rpc('decrement_stock', { row_id: item.id, quantity: 1 });
-          // Note: Si le RPC n'est pas configuré, on fait un update simple :
+          // On fait un update simple du stock
           const { data: currentProd } = await supabase.from('products').select('stock').eq('id', item.id).single();
           if (currentProd) {
              await supabase.from('products').update({ stock: currentProd.stock - 1 }).eq('id', item.id);
