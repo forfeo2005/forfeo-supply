@@ -4,64 +4,65 @@ import { supabase } from '../supabase';
 
 const Login = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   
+  // --- ÉTATS ---
+  const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false); // Bascule Connexion / Inscription
+  const [selectedRole, setSelectedRole] = useState(null); // 'merchant' ou 'supplier' ou null (pas encore choisi)
+
+  // Données formulaire
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('merchant');
   const [msg, setMsg] = useState('');
 
+  // --- LOGIQUE D'AUTHENTIFICATION ---
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMsg('');
 
-    // Supabase impose 6 caractères minimum par sécurité.
-    // On prévient l'utilisateur pour éviter l'erreur 400 obscure.
+    // Sécurité mdp
     if (password.length < 6) {
-      setMsg("⚠️ Le mot de passe doit contenir au moins 6 caractères (Sécurité Supabase).");
+      setMsg("⚠️ Le mot de passe doit contenir au moins 6 caractères.");
       setLoading(false);
       return;
     }
 
     try {
       if (isSignUp) {
-        // --- INSCRIPTION ---
+        // INSCRIPTION
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          // Cette option assure que si l'email confirm est OFF, on connecte direct
           options: {
-            data: { role: role } // On stocke le rôle direct dans les métadonnées
+            data: { role: selectedRole } // On utilise le rôle choisi à l'étape 1
           }
         });
 
         if (error) throw error;
 
         if (data.user) {
-          // Création du profil dans la table 'profiles'
+          // Création profil
           const { error: profileError } = await supabase
             .from('profiles')
             .upsert({ 
               id: data.user.id,
-              role: role,
+              role: selectedRole,
               email: email
             });
             
           if (profileError) console.error("Erreur profil:", profileError);
           
-          setMsg('✅ Compte créé avec succès ! Redirection...');
+          setMsg('✅ Compte créé ! Redirection...');
           
-          // Redirection immédiate après inscription
           setTimeout(() => {
-            if (role === 'supplier') navigate('/dashboard');
+            if (selectedRole === 'supplier') navigate('/dashboard');
             else navigate('/merchant');
           }, 1500);
         }
 
       } else {
-        // --- CONNEXION ---
+        // CONNEXION
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -69,13 +70,14 @@ const Login = () => {
 
         if (error) throw error;
 
-        // Vérification du rôle pour rediriger
+        // Vérification du rôle
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', data.user.id)
           .single();
 
+        // Redirection selon le profil trouvé en base
         if (profile?.role === 'supplier') {
           navigate('/dashboard');
         } else {
@@ -90,21 +92,76 @@ const Login = () => {
     }
   };
 
+  // --- RENDU : ÉTAPE 1 - SÉLECTION DU RÔLE ---
+  if (!selectedRole) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative">
+        <Link to="/" className="absolute top-6 left-6 flex items-center gap-2 text-slate-500 hover:text-forfeo-600 transition font-medium">
+          <span>←</span> Retour à l'accueil
+        </Link>
+
+        <div className="text-center mb-10">
+          <span className="text-4xl mb-4 block">👋</span>
+          <h1 className="text-3xl font-bold text-slate-900">Bienvenue sur Forfeo</h1>
+          <p className="text-slate-500 mt-2">Choisissez votre espace pour continuer</p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6 max-w-4xl w-full">
+          {/* Carte Commerçant */}
+          <button 
+            onClick={() => setSelectedRole('merchant')}
+            className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 hover:border-emerald-500 hover:shadow-xl hover:-translate-y-1 transition-all group text-left"
+          >
+            <div className="w-14 h-14 bg-emerald-50 rounded-xl flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+              🏪
+            </div>
+            <h2 className="text-xl font-bold text-slate-900">Je suis Acheteur</h2>
+            <p className="text-sm text-slate-500 mt-2">Restaurants, Bureaux, Hôtels... Accédez au catalogue et commandez en gros.</p>
+            <span className="inline-block mt-4 text-emerald-600 font-bold text-sm group-hover:underline">Se connecter →</span>
+          </button>
+
+          {/* Carte Fournisseur */}
+          <button 
+            onClick={() => setSelectedRole('supplier')}
+            className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500 hover:shadow-xl hover:-translate-y-1 transition-all group text-left"
+          >
+            <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition">
+              🏭
+            </div>
+            <h2 className="text-xl font-bold text-slate-900">Je suis Fournisseur</h2>
+            <p className="text-sm text-slate-500 mt-2">Producteurs, Grossistes, Services... Gérez vos produits et vos commandes.</p>
+            <span className="inline-block mt-4 text-blue-600 font-bold text-sm group-hover:underline">Se connecter →</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- RENDU : ÉTAPE 2 - FORMULAIRE DE LOGIN ---
+  const isSupplier = selectedRole === 'supplier';
+  const themeColor = isSupplier ? 'bg-blue-600' : 'bg-emerald-600'; // Bleu pour fournisseur, Vert pour acheteur
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative">
       
-      {/* BOUTON RETOUR ACCUEIL */}
-      <Link to="/" className="absolute top-6 left-6 flex items-center gap-2 text-slate-500 hover:text-forfeo-600 transition font-medium">
-        <span>←</span> Retour à l'accueil
-      </Link>
+      {/* Bouton retour au choix */}
+      <button 
+        onClick={() => { setSelectedRole(null); setMsg(''); }}
+        className="absolute top-6 left-6 flex items-center gap-2 text-slate-500 hover:text-slate-800 transition font-medium"
+      >
+        <span>←</span> Changer de profil
+      </button>
 
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100 mt-10">
-        <div className="bg-forfeo-600 p-8 text-center">
-          <h2 className="text-3xl font-bold text-white mb-2">
-            {isSignUp ? 'Rejoindre Forfeo' : 'Bienvenue'}
+        
+        {/* Header Dynamique */}
+        <div className={`${themeColor} p-8 text-center transition-colors duration-300`}>
+          <div className="text-4xl mb-2">{isSupplier ? '🏭' : '🏪'}</div>
+          <h2 className="text-2xl font-bold text-white mb-1">
+            Espace {isSupplier ? 'Fournisseur' : 'Acheteur'}
           </h2>
-          <p className="text-forfeo-100">
-            {isSignUp ? 'Créez votre réseau B2B local' : 'Connectez-vous à votre espace'}
+          <p className="text-white/80 text-sm">
+            {isSignUp ? 'Créez votre compte professionnel' : 'Connectez-vous à votre tableau de bord'}
           </p>
         </div>
 
@@ -120,7 +177,7 @@ const Login = () => {
               <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
               <input 
                 type="email" required
-                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-forfeo-500 outline-none"
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-slate-400 outline-none transition"
                 placeholder="nom@entreprise.com"
                 value={email} onChange={(e) => setEmail(e.target.value)}
               />
@@ -130,29 +187,19 @@ const Login = () => {
               <label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe</label>
               <input 
                 type="password" required
-                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-forfeo-500 outline-none"
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-slate-400 outline-none transition"
                 placeholder="Minimum 6 caractères"
                 value={password} onChange={(e) => setPassword(e.target.value)}
               />
             </div>
 
-            {isSignUp && (
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <label className="block text-sm font-medium text-slate-700 mb-3">Vous êtes :</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="role" value="merchant" checked={role === 'merchant'} onChange={(e) => setRole(e.target.value)} className="text-forfeo-600 focus:ring-forfeo-500" />
-                    <span className="text-slate-800">Acheteur</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="role" value="supplier" checked={role === 'supplier'} onChange={(e) => setRole(e.target.value)} className="text-forfeo-600 focus:ring-forfeo-500" />
-                    <span className="text-slate-800">Fournisseur</span>
-                  </label>
-                </div>
-              </div>
-            )}
+            {/* Note : Plus de sélecteur de rôle ici, car c'est déjà choisi */}
 
-            <button type="submit" disabled={loading} className="w-full bg-forfeo-600 hover:bg-forfeo-700 text-white font-bold py-3 rounded-lg shadow-lg transition disabled:opacity-50">
+            <button 
+              type="submit" 
+              disabled={loading} 
+              className={`w-full ${themeColor} hover:opacity-90 text-white font-bold py-3 rounded-lg shadow-lg transition disabled:opacity-50`}
+            >
               {loading ? 'Chargement...' : (isSignUp ? "Créer mon compte" : "Se connecter")}
             </button>
           </form>
@@ -160,7 +207,10 @@ const Login = () => {
           <div className="mt-6 text-center pt-6 border-t border-slate-100">
             <p className="text-slate-600 text-sm">
               {isSignUp ? "Déjà un compte ?" : "Pas encore de compte ?"}
-              <button onClick={() => { setIsSignUp(!isSignUp); setMsg(''); }} className="ml-2 text-forfeo-700 font-bold hover:underline">
+              <button 
+                onClick={() => { setIsSignUp(!isSignUp); setMsg(''); }} 
+                className={`ml-2 font-bold hover:underline ${isSupplier ? 'text-blue-600' : 'text-emerald-600'}`}
+              >
                 {isSignUp ? "Se connecter" : "S'inscrire gratuitement"}
               </button>
             </p>
