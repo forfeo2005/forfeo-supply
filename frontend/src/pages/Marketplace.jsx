@@ -1,91 +1,62 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-
-const API_URL = 'https://forfeo-supply-api.onrender.com';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
+import { useCart } from '../context/CartContext'; // <--- IMPORT DU PANIER
 
 const Marketplace = () => {
-  const [searchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
-  const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState('Tout');
-  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
+  const [category, setCategory] = useState('Tout');
+  
+  // Récupération de la fonction d'ajout au panier
+  const { addToCart } = useCart(); 
 
-  // Chargement
+  // Charger les VRAIS produits depuis Supabase
   useEffect(() => {
-    fetch(`${API_URL}/api/products`)
-      .then(res => res.json())
-      .then(data => {
-        setProducts(data);
-        setFilteredProducts(data);
-        setLoading(false);
-      })
-      .catch(err => setLoading(false));
-  }, []);
+    const fetchProducts = async () => {
+      setLoading(true);
+      
+      let query = supabase
+        .from('products')
+        .select('*')
+        .eq('active', true) // On ne montre que les produits actifs
+        .gt('stock', 0);    // Et qui ont du stock
 
-  // Filtrage (Recherche + Catégorie)
-  useEffect(() => {
-    let result = products;
+      if (category !== 'Tout') {
+        query = query.eq('category', category);
+      }
 
-    // Filtre Recherche
-    if (searchTerm) {
-      result = result.filter(p => 
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        p.producer.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
+      const { data, error } = await query;
 
-    // Filtre Catégorie
-    if (activeCategory !== 'Tout') {
-      result = result.filter(p => p.category === activeCategory);
-    }
+      if (error) console.error('Erreur chargement produits:', error);
+      else setProducts(data || []);
+      
+      setLoading(false);
+    };
 
-    setFilteredProducts(result);
-  }, [searchTerm, activeCategory, products]);
-
-  // Commander (Simulation)
-  const commander = (productName) => {
-    alert(`🚀 Commande de ${productName} envoyée au fournisseur !`);
-  };
-
-  const categories = ['Tout', 'Légumes', 'Épicerie', 'Viande', 'Bureau', 'Services'];
+    fetchProducts();
+  }, [category]);
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="pt-32 pb-20 min-h-screen bg-slate-50">
+      <div className="container mx-auto px-6">
         
-        {/* Header du Marché */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">Le Marché Forfeo</h1>
-            <p className="text-slate-500 mt-1">
-              {filteredProducts.length} offres disponibles près de Québec
-            </p>
-          </div>
-          
-          {/* Barre de recherche locale */}
-          <div className="relative w-full md:w-96">
-            <input 
-              type="text" 
-              placeholder="Rechercher un produit ou service..." 
-              className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-forfeo-500 focus:border-transparent outline-none shadow-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <span className="absolute left-3 top-3.5 text-slate-400">🔍</span>
-          </div>
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-slate-900 mb-4">Le Marché Local</h1>
+          <p className="text-slate-500 max-w-2xl mx-auto">
+            Découvrez les produits frais disponibles directement auprès des producteurs de votre région.
+          </p>
         </div>
 
-        {/* Filtres Catégories */}
-        <div className="flex overflow-x-auto pb-4 gap-2 mb-8 no-scrollbar">
-          {categories.map(cat => (
+        {/* Filtres */}
+        <div className="flex flex-wrap justify-center gap-4 mb-12">
+          {['Tout', 'Alimentaire', 'Bureau', 'Services', 'Équipement'].map((cat) => (
             <button
               key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
-                activeCategory === cat 
-                  ? 'bg-forfeo-600 text-white shadow-md transform scale-105' 
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              onClick={() => setCategory(cat)}
+              className={`px-6 py-2 rounded-full font-bold transition ${
+                category === cat 
+                  ? 'bg-forfeo-600 text-white shadow-lg' 
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
               }`}
             >
               {cat}
@@ -93,47 +64,45 @@ const Marketplace = () => {
           ))}
         </div>
 
-        {/* Grille Produits */}
+        {/* Grille de Produits */}
         {loading ? (
-          <div className="text-center py-20 text-slate-400 animate-pulse">Chargement des offres...</div>
-        ) : filteredProducts.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
-            <p className="text-slate-500 text-lg">Aucun résultat trouvé pour "{searchTerm}".</p>
-            <button onClick={() => {setSearchTerm(''); setActiveCategory('Tout');}} className="text-forfeo-600 font-bold mt-2 hover:underline">Réinitialiser les filtres</button>
+          <div className="text-center py-20 text-slate-400 animate-pulse">Chargement des produits...</div>
+        ) : products.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-2xl border border-slate-100">
+            <span className="text-4xl block mb-2">🥕</span>
+            <p className="text-slate-500">Aucun produit trouvé dans cette catégorie pour le moment.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredProducts.map(p => (
-              <div key={p.id} className="group bg-white rounded-2xl shadow-sm hover:shadow-xl border border-slate-100 overflow-hidden transition-all duration-300 flex flex-col">
-                {/* Image Placeholder (pour l'instant une couleur) */}
-                <div className="h-40 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-4xl group-hover:scale-105 transition-transform duration-500">
-                  {p.category === 'Légumes' ? '🥦' : p.category === 'Bureau' ? '🖇️' : '📦'}
+          <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-8">
+            {products.map((product) => (
+              <div key={product.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition group">
+                {/* Image Placeholder (Car on ne gère pas encore les images uploadées) */}
+                <div className="h-48 bg-slate-100 flex items-center justify-center text-4xl group-hover:bg-slate-50 transition">
+                  {product.category === 'Alimentaire' ? '🍎' : 
+                   product.category === 'Bureau' ? '✏️' : '📦'}
                 </div>
                 
-                <div className="p-5 flex-1 flex flex-col">
+                <div className="p-6">
                   <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-forfeo-600 bg-forfeo-50 px-2 py-1 rounded-md">
-                      {p.category}
+                    <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-1 rounded uppercase">
+                      {product.category}
                     </span>
-                    <span className="text-xs text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                      Local
-                    </span>
+                    <span className="text-xs text-slate-400 font-mono">Stock: {product.stock}</span>
                   </div>
-
-                  <h3 className="font-bold text-slate-900 text-lg leading-tight mb-1">{p.name}</h3>
-                  <p className="text-sm text-slate-500 mb-4">Vendu par <span className="font-medium text-slate-700">{p.producer}</span></p>
                   
-                  <div className="mt-auto flex items-center justify-between pt-4 border-t border-slate-50">
-                    <div>
-                      <span className="block text-lg font-extrabold text-slate-900">{p.price} $</span>
-                      <span className="text-xs text-slate-400">par {p.unit}</span>
+                  <h3 className="text-lg font-bold text-slate-900 mb-1">{product.name}</h3>
+                  <p className="text-sm text-slate-500 mb-4">Par {product.producer || 'Producteur local'}</p>
+                  
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-50">
+                    <div className="font-mono font-bold text-xl text-forfeo-600">
+                      {product.price}$ <span className="text-xs text-slate-400 font-sans">/ {product.unit}</span>
                     </div>
+                    
                     <button 
-                      onClick={() => commander(p.name)}
-                      className="bg-slate-900 hover:bg-forfeo-600 text-white p-3 rounded-xl transition-colors shadow-lg"
-                      title="Ajouter au panier"
+                      onClick={() => addToCart(product)}
+                      className="bg-slate-900 hover:bg-forfeo-600 text-white p-3 rounded-xl transition shadow-lg active:scale-95"
                     >
-                      🛒
+                      Ajouter +
                     </button>
                   </div>
                 </div>
@@ -141,6 +110,7 @@ const Marketplace = () => {
             ))}
           </div>
         )}
+
       </div>
     </div>
   );
