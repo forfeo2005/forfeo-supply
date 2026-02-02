@@ -14,6 +14,7 @@ const MerchantDashboard = () => {
 
   useEffect(() => {
     const getUser = async () => {
+      // La session est gérée automatiquement par Supabase ici
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) navigate('/login');
       setUser(user);
@@ -32,13 +33,17 @@ const MerchantDashboard = () => {
       {/* Header Privé Acheteur */}
       <nav className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-20">
         <div className="flex items-center gap-2">
+          {/* Le logo redirige vers le marché pour une navigation fluide */}
           <Link to="/market" className="text-2xl hover:scale-110 transition">🌱</Link>
           <span className="font-bold text-slate-800 hidden sm:inline">Espace Acheteur</span>
         </div>
         <div className="flex items-center gap-4">
-          <Link to="/market" className="text-slate-600 hover:text-emerald-600 font-medium text-sm">
-            ← Retour au Marché
+          
+          {/* MODIFICATION ICI : Bouton Retour à l'accueil */}
+          <Link to="/" className="text-slate-600 hover:text-emerald-600 font-medium text-sm">
+            ← Retour à l'accueil
           </Link>
+          
           <div className="h-6 w-px bg-slate-200"></div>
           <button onClick={handleLogout} className="text-sm font-bold text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg transition">
             Déconnexion
