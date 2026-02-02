@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom'; // Ajout de Link pour le retour accueil
 import { supabase } from '../supabase';
 
 const Dashboard = () => {
@@ -28,6 +28,7 @@ const Dashboard = () => {
   // 1. Initialisation
   useEffect(() => {
     const initData = async () => {
+      // Supabase gère la session automatiquement via getUser()
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return navigate('/login');
       setUser(user);
@@ -136,6 +137,12 @@ const Dashboard = () => {
           <NavButton active={activeTab === 'products'} onClick={() => setActiveTab('products')} icon="📦" label="Ma Boutique" />
           <NavButton active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} icon="🚚" label="Commandes" />
           <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon="⚙️" label="Paramètres" />
+          
+          {/* AJOUT : Bouton Retour Accueil */}
+          <Link to="/" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition font-medium text-slate-400 hover:bg-slate-800 hover:text-white mt-4 border-t border-slate-800">
+            <span>🏠</span>
+            <span>Retour site public</span>
+          </Link>
         </nav>
         <div className="p-4 border-t border-slate-800">
           <button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition text-sm font-medium">
