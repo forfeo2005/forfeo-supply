@@ -27,6 +27,8 @@ const MerchantDashboard = () => {
 
   const fetchProducts = async () => {
     setLoadingProducts(true);
+    // On récupère les VRAIS produits de la base de données
+    // Cela corrige l'erreur de "supplier_id null" car les vrais produits ont un propriétaire
     const { data, error } = await supabase
       .from('products')
       .select('*')
@@ -88,9 +90,13 @@ const MerchantDashboard = () => {
             </div>
 
             {loadingProducts ? (
-               <div className="text-center py-10 text-slate-400">Chargement du catalogue...</div>
+               <div className="text-center py-20 text-slate-400">Chargement du catalogue...</div>
             ) : products.length === 0 ? (
-               <div className="text-center py-10 bg-white rounded-xl shadow-sm">Aucun produit disponible.</div>
+               <div className="text-center py-20 bg-white rounded-xl shadow-sm border border-slate-100">
+                 <div className="text-4xl mb-4">🥕</div>
+                 <h3 className="text-xl font-bold text-slate-700">Le marché est vide pour l'instant.</h3>
+                 <p className="text-slate-400 mt-2">Attendez que les fournisseurs ajoutent des produits.</p>
+               </div>
             ) : (
               <div className="grid md:grid-cols-3 gap-6">
                 {products.map((product) => (
