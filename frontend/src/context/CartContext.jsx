@@ -1,59 +1,67 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 
+// Création du contexte
 const CartContext = createContext();
 
+// Hook personnalisé pour utiliser le panier facilement partout
 export const useCart = () => useContext(CartContext);
 
+// Le fournisseur du panier (à mettre autour de l'application)
 export const CartProvider = ({ children }) => {
-  // On essaie de récupérer le panier sauvegardé dans le navigateur (LocalStorage)
+  
+  // 1. On initialise le panier en vérifiant s'il y a déjà quelque chose dans le navigateur (LocalStorage)
   const [cart, setCart] = useState(() => {
     const savedCart = localStorage.getItem('forfeo_cart');
     return savedCart ? JSON.parse(savedCart) : [];
   });
 
-  // À chaque fois que le panier change, on sauvegarde dans le navigateur
+  // 2. À chaque modification du panier, on sauvegarde dans le LocalStorage
   useEffect(() => {
     localStorage.setItem('forfeo_cart', JSON.stringify(cart));
   }, [cart]);
 
-  // FONCTION : Ajouter au panier
+  // --- FONCTIONS DU PANIER ---
+
+  // Ajouter un produit
   const addToCart = (product) => {
     setCart(prevCart => {
-      // Est-ce que le produit est déjà là ?
+      // On vérifie si le produit est déjà dedans
       const existingItem = prevCart.find(item => item.id === product.id);
       
       if (existingItem) {
-        // Si oui, on augmente juste la quantité (+1)
+        // Si oui, on augmente la quantité (+1)
         return prevCart.map(item =>
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       } else {
-        // Sinon, on l'ajoute avec quantité 1
+        // Sinon, on l'ajoute avec une quantité de 1
         return [...prevCart, { ...product, quantity: 1 }];
       }
     });
-    // Petit effet visuel ou log pour confirmer
-    console.log("Ajouté au panier:", product.name);
   };
 
-  // FONCTION : Retirer un article
+  // Retirer un produit
   const removeFromCart = (productId) => {
     setCart(prevCart => prevCart.filter(item => item.id !== productId));
   };
 
-  // FONCTION : Changer la quantité manuellement
+  // Modifier la quantité manuellement (+ ou -)
   const updateQuantity = (productId, newQuantity) => {
-    if (newQuantity < 1) return;
+    if (newQuantity < 1) return; // On empêche d'avoir 0 ou négatif
     setCart(prevCart =>
       prevCart.map(item => item.id === productId ? { ...item, quantity: newQuantity } : item)
     );
   };
 
-  // FONCTION : Vider le panier (après commande)
+  // Vider le panier complet (après paiement)
   const clearCart = () => setCart([]);
 
-  // CALCULS
+  // --- CALCULS AUTOMATIQUES ---
+  
+  // Nombre total d'articles (pour le badge rouge sur l'icône)
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+  
+  // Prix total du panier
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0).toFixed(2);
 
   return (
