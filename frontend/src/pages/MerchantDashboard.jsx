@@ -2,18 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { useCart } from '../context/CartContext';
-
-// --- ICÔNES SVG (Légers et rapides) ---
-const Icons = {
-  Menu: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>,
-  X: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
-  Search: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
-  Cart: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>,
-  User: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
-  Box: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
-  Logout: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
-  Star: () => <svg className="w-4 h-4 text-yellow-500 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-};
+import { Menu, X, Search, ShoppingBag, User, LogOut, Star, TrendingUp, Filter } from 'lucide-react';
 
 const MerchantDashboard = () => {
   const navigate = useNavigate();
@@ -29,7 +18,7 @@ const MerchantDashboard = () => {
   // Filtres & Recherche
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tout');
-  const [sortBy, setSortBy] = useState('priceAsc'); // Par défaut : Moins cher
+  const [sortBy, setSortBy] = useState('priceAsc'); 
 
   // Profil
   const [profile, setProfile] = useState({ company_name: '', address_line1: '', city: '', state: 'QC', postal_code: '', phone: '' });
@@ -49,17 +38,31 @@ const MerchantDashboard = () => {
 
   const fetchData = async (userId) => {
     setLoading(true);
-    // Catalogue (Tous les produits actifs)
-    const { data: productsData } = await supabase.from('products').select('*').eq('active', true).gt('stock', 0);
+    // 1. Catalogue (Seulement les produits valides avec du stock)
+    const { data: productsData } = await supabase
+      .from('products')
+      .select('*')
+      .eq('active', true)
+      .gt('stock', 0)
+      .not('supplier_id', 'is', null) // SÉCURITÉ : Ignore les produits sans fournisseur
+      .order('created_at', { ascending: false });
+      
     if (productsData) setProducts(productsData);
-    
-    // Commandes
+
+    // 2. Commandes
     const { data: ordersData } = await supabase.from('orders').select(`*, items: order_items (quantity, price_at_purchase, product: products (name))`).eq('buyer_id', userId).order('created_at', { ascending: false });
     if (ordersData) setOrders(ordersData);
-    
-    // Profil
+
+    // 3. Profil
     const { data: profileData } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (profileData) setProfile({ company_name: profileData.company_name || '', address_line1: profileData.address_line1 || '', city: profileData.city || '', state: profileData.state || 'QC', postal_code: profileData.postal_code || '', phone: profileData.phone || '' });
+    if (profileData) setProfile({ 
+      company_name: profileData.company_name || '', 
+      address_line1: profileData.address_line1 || '', 
+      city: profileData.city || '', 
+      state: profileData.state || 'QC', 
+      postal_code: profileData.postal_code || '', 
+      phone: profileData.phone || '' 
+    });
     setLoading(false);
   };
 
@@ -67,14 +70,13 @@ const MerchantDashboard = () => {
     e.preventDefault();
     setSaving(true);
     const { error } = await supabase.from('profiles').update(profile).eq('id', user.id);
-    if (error) alert("Erreur: " + error.message); else alert("Profil sauvegardé ! ✅");
+    if (error) alert("Erreur: " + error.message); else alert("Profil mis à jour ! ✅");
     setSaving(false);
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); navigate('/'); };
 
-  // --- LOGIQUE DE TRI INTELLIGENT ---
-  // Calcul du prix minimum par catégorie pour le badge
+  // Logique de tri pour le comparateur
   const getMinPrice = (cat) => {
     const prods = products.filter(p => p.category === cat);
     return prods.length ? Math.min(...prods.map(p => p.price)) : 0;
@@ -99,10 +101,10 @@ const MerchantDashboard = () => {
         <span className="font-bold text-lg flex items-center gap-2">🌱 Forfeo Market</span>
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/cart')} className="relative">
-            <Icons.Cart />
+            <ShoppingBag size={24} />
             {cartCount > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full">{cartCount}</span>}
           </button>
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <Icons.X /> : <Icons.Menu />}</button>
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}</button>
         </div>
       </div>
 
@@ -113,16 +115,16 @@ const MerchantDashboard = () => {
           <div><h2 className="font-bold text-xl text-white">Forfeo</h2><p className="text-xs text-emerald-300 font-bold uppercase">Espace Acheteur</p></div>
         </div>
         <nav className="flex-1 p-4 space-y-2 mt-20 md:mt-4">
-          <NavButton active={activeTab === 'catalog'} onClick={() => {setActiveTab('catalog'); setMobileMenuOpen(false)}} icon={<Icons.Box />} label="Marché Local" />
-          <NavButton active={activeTab === 'orders'} onClick={() => {setActiveTab('orders'); setMobileMenuOpen(false)}} icon={<Icons.Cart />} label="Mes Commandes" />
-          <NavButton active={activeTab === 'settings'} onClick={() => {setActiveTab('settings'); setMobileMenuOpen(false)}} icon={<Icons.User />} label="Mon Profil" />
+          <NavButton active={activeTab === 'catalog'} onClick={() => {setActiveTab('catalog'); setMobileMenuOpen(false)}} icon={<ShoppingBag size={20}/>} label="Marché Local" />
+          <NavButton active={activeTab === 'orders'} onClick={() => {setActiveTab('orders'); setMobileMenuOpen(false)}} icon={<TrendingUp size={20}/>} label="Mes Commandes" />
+          <NavButton active={activeTab === 'settings'} onClick={() => {setActiveTab('settings'); setMobileMenuOpen(false)}} icon={<User size={20}/>} label="Mon Profil" />
         </nav>
         <div className="p-6 border-t border-emerald-800">
            <button onClick={() => navigate('/cart')} className="w-full bg-emerald-500 hover:bg-emerald-400 text-white p-3 rounded-xl font-bold flex items-center justify-between shadow-lg mb-4 transition">
-              <span className="flex items-center gap-2 text-emerald-900"><Icons.Cart /> Panier</span>
+              <span className="flex items-center gap-2 text-emerald-900"><ShoppingBag size={20}/> Panier</span>
               {cartCount > 0 && <span className="bg-white text-emerald-900 text-xs font-bold h-6 w-6 flex items-center justify-center rounded-full">{cartCount}</span>}
            </button>
-          <button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-500/20 text-emerald-200 rounded-xl transition text-sm"><Icons.Logout /> Déconnexion</button>
+          <button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-500/20 text-emerald-200 rounded-xl transition text-sm"><LogOut size={20}/> Déconnexion</button>
         </div>
       </aside>
 
@@ -139,7 +141,7 @@ const MerchantDashboard = () => {
             {/* FILTRES & RECHERCHE */}
             <div className="bg-white p-4 rounded-2xl shadow-sm mb-8 flex flex-col md:flex-row gap-4 sticky top-0 z-10 border border-slate-100">
               <div className="relative flex-1">
-                <div className="absolute left-3 top-3 text-slate-400"><Icons.Search /></div>
+                <div className="absolute left-3 top-3 text-slate-400"><Search size={20}/></div>
                 <input type="text" placeholder="Rechercher (pommes, services...)" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
               <select className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm outline-none cursor-pointer" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
@@ -163,7 +165,7 @@ const MerchantDashboard = () => {
                   const isBestPrice = product.price === getMinPrice(product.category) && product.price > 0;
                   return (
                     <div key={product.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl transition-all flex flex-col h-full group relative">
-                       {isBestPrice && <div className="absolute top-3 left-3 bg-yellow-400 text-yellow-900 text-[10px] font-black px-2 py-1 rounded-full shadow-sm flex items-center gap-1 z-10"><Icons.Star /> MEILLEUR PRIX</div>}
+                       {isBestPrice && <div className="absolute top-3 left-3 bg-yellow-400 text-yellow-900 text-[10px] font-black px-2 py-1 rounded-full shadow-sm flex items-center gap-1 z-10"><Star size={12} fill="currentColor" /> MEILLEUR PRIX</div>}
                        <div className="h-40 bg-slate-50 flex items-center justify-center text-5xl group-hover:scale-110 transition-transform duration-500">
                          {product.category === 'Alimentaire' ? '🥦' : product.category === 'Bureau' ? '✏️' : product.category === 'Services' ? '🔧' : '📦'}
                        </div>
@@ -184,7 +186,7 @@ const MerchantDashboard = () => {
           </div>
         )}
 
-        {/* --- COMMANDES --- */}
+        {/* COMMANDES */}
         {activeTab === 'orders' && (
           <div className="max-w-4xl mx-auto">
             <h1 className="text-2xl font-bold mb-8">Mes Commandes</h1>
@@ -203,7 +205,7 @@ const MerchantDashboard = () => {
           </div>
         )}
 
-        {/* --- PARAMÈTRES --- */}
+        {/* PARAMÈTRES */}
         {activeTab === 'settings' && (
           <div className="max-w-2xl mx-auto">
             <h1 className="text-2xl font-bold mb-8">Mon Profil</h1>
