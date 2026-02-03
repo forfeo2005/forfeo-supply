@@ -1,55 +1,88 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useMemo } from 'react';
 
 // Création du contexte
-const CartContext = createContext();
+const CartContext = createContext(null);
 
 // Hook personnalisé pour utiliser le panier facilement partout
 export const useCart = () => useContext(CartContext);
 
+// Helpers SAFE
+const isBrowser = typeof window !== 'undefined';
+
+const safeParseJSON = (value, fallback) => {
+  try {
+    return value ? JSON.parse(value) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+};
+
+const normalizeItem = (item) => {
+  // On garde toutes les props du produit, on normalise seulement price/quantity
+  const price = Number(item?.price ?? 0);
+  const quantity = Number(item?.quantity ?? 1);
+
+  return {
+    ...item,
+    price: Number.isFinite(price) ? price : 0,
+    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+  };
+};
+
 // Le fournisseur du panier (à mettre autour de l'application)
 export const CartProvider = ({ children }) => {
-  
-  // 1. On initialise le panier en vérifiant s'il y a déjà quelque chose dans le navigateur (LocalStorage)
+  // 1) On initialise le panier en vérifiant s'il y a déjà quelque chose dans le navigateur (LocalStorage)
   const [cart, setCart] = useState(() => {
-    const savedCart = localStorage.getItem('forfeo_cart');
-    return savedCart ? JSON.parse(savedCart) : [];
+    if (!isBrowser) return [];
+    const savedCart = window.localStorage.getItem('forfeo_cart');
+    const parsed = safeParseJSON(savedCart, []);
+    // Normalisation (évite NaN / quantity invalide)
+    return Array.isArray(parsed) ? parsed.map(normalizeItem) : [];
   });
 
-  // 2. À chaque modification du panier, on sauvegarde dans le LocalStorage
+  // 2) À chaque modification du panier, on sauvegarde dans le LocalStorage
   useEffect(() => {
-    localStorage.setItem('forfeo_cart', JSON.stringify(cart));
+    if (!isBrowser) return;
+    window.localStorage.setItem('forfeo_cart', JSON.stringify(cart));
   }, [cart]);
 
   // --- FONCTIONS DU PANIER ---
 
   // Ajouter un produit
   const addToCart = (product) => {
-    setCart(prevCart => {
-      // On vérifie si le produit est déjà dedans
-      const existingItem = prevCart.find(item => item.id === product.id);
-      
+    if (!product || product.id == null) return;
+
+    setCart((prevCart) => {
+      const existingItem = prevCart.find((item) => item.id === product.id);
+
       if (existingItem) {
         // Si oui, on augmente la quantité (+1)
-        return prevCart.map(item =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        return prevCart.map((item) =>
+          item.id === product.id
+            ? normalizeItem({ ...item, quantity: Number(item.quantity) + 1 })
+            : item
         );
-      } else {
-        // Sinon, on l'ajoute avec une quantité de 1
-        return [...prevCart, { ...product, quantity: 1 }];
       }
+
+      // Sinon, on l'ajoute avec une quantité de 1
+      return [...prevCart, normalizeItem({ ...product, quantity: 1 })];
     });
   };
 
   // Retirer un produit
   const removeFromCart = (productId) => {
-    setCart(prevCart => prevCart.filter(item => item.id !== productId));
+    setCart((prevCart) => prevCart.filter((item) => item.id !== productId));
   };
 
   // Modifier la quantité manuellement (+ ou -)
   const updateQuantity = (productId, newQuantity) => {
-    if (newQuantity < 1) return; // On empêche d'avoir 0 ou négatif
-    setCart(prevCart =>
-      prevCart.map(item => item.id === productId ? { ...item, quantity: newQuantity } : item)
+    const qty = Number(newQuantity);
+    if (!Number.isFinite(qty) || qty < 1) return; // On empêche d'avoir 0, négatif, ou NaN
+
+    setCart((prevCart) =>
+      prevCart.map((item) =>
+        item.id === productId ? normalizeItem({ ...item, quantity: qty }) : item
+      )
     );
   };
 
@@ -57,23 +90,33 @@ export const CartProvider = ({ children }) => {
   const clearCart = () => setCart([]);
 
   // --- CALCULS AUTOMATIQUES ---
-  
-  // Nombre total d'articles (pour le badge rouge sur l'icône)
-  const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
-  
-  // Prix total du panier
-  const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0).toFixed(2);
+  const cartCount = useMemo(() => {
+    return cart.reduce((acc, item) => acc + (Number(item.quantity) || 0), 0);
+  }, [cart]);
+
+  // Prix total du panier (string comme avant grâce à toFixed)
+  const cartTotal = useMemo(() => {
+    const total = cart.reduce((acc, item) => {
+      const price = Number(item.price) || 0;
+      const qty = Number(item.quantity) || 0;
+      return acc + price * qty;
+    }, 0);
+
+    return total.toFixed(2);
+  }, [cart]);
 
   return (
-    <CartContext.Provider value={{ 
-      cart, 
-      addToCart, 
-      removeFromCart, 
-      updateQuantity, 
-      clearCart, 
-      cartCount, 
-      cartTotal 
-    }}>
+    <CartContext.Provider
+      value={{
+        cart,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        cartCount,
+        cartTotal,
+      }}
+    >
       {children}
     </CartContext.Provider>
   );
