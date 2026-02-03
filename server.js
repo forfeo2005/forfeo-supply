@@ -152,4 +152,295 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const metadata = session.metadata || {};
-    const customerEmail = session.
+    const customerEmail = session.customer_details?.email || '';
+    const amount = (session.amount_total || 0) / 100;
+    const userId = metadata.userId || null;
+
+    console.log(`💰 Paiement reçu pour ${customerEmail} (total Stripe: ${amount.toFixed(2)}$)`);
+
+    // ✅ NOUVELLE LOGIQUE : si on a cartJson, on gère multi-fournisseurs+quantités
+    if (metadata.cartJson) {
+      let cart = [];
+      try {
+        cart = JSON.parse(metadata.cartJson);
+      } catch (e) {
+        console.error('❌ Impossible de parser cartJson dans metadata:', e);
+      }
+
+      if (Array.isArray(cart) && cart.length > 0) {
+        // Groupage par fournisseur
+        const itemsBySupplier = cart.reduce((acc, item) => {
+          const supplierKey = item.supplier_id ?? 'unknown_supplier';
+          if (!acc[supplierKey]) acc[supplierKey] = [];
+          acc[supplierKey].push(item);
+          return acc;
+        }, {});
+
+        for (const [supplierId, items] of Object.entries(itemsBySupplier)) {
+          const supplierAmount = items.reduce((sum, item) => {
+            const price = Number(item.price) || 0;
+            const qty = Number(item.quantity) || 1;
+            return sum + price * qty;
+          }, 0);
+
+          const supplierName =
+            items[0]?.producer || metadata.supplierName || 'Fournisseur';
+
+          const { data: order, error } = await supabase
+            .from('orders')
+            .insert([
+              {
+                buyer_id: userId,
+                supplier_id: supplierId === 'unknown_supplier' ? null : supplierId,
+                total_amount: supplierAmount,
+                status: 'pending',
+                payment_term: 'pay_now',
+                payment_status: 'paid',
+              },
+            ])
+            .select()
+            .single();
+
+          if (error || !order) {
+            console.error('❌ Erreur insertion commande Supabase:', error);
+            continue;
+          }
+
+          // Enregistrer les articles + MAJ stock
+          for (const item of items) {
+            const price = Number(item.price) || 0;
+            const qty = Number(item.quantity) || 1;
+
+            const { error: itemErr } = await supabase.from('order_items').insert([
+              {
+                order_id: order.id,
+                product_id: item.id,
+                quantity: qty,
+                price_at_purchase: price,
+              },
+            ]);
+
+            if (itemErr) {
+              console.error('❌ Erreur insertion order_items:', itemErr);
+            }
+
+            // MAJ stock simple (si la table products a bien "stock")
+            const { data: currentProd, error: stockErr } = await supabase
+              .from('products')
+              .select('stock')
+              .eq('id', item.id)
+              .single();
+
+            if (stockErr) {
+              console.error('❌ Erreur récupération stock produit:', stockErr);
+            }
+
+            if (currentProd) {
+              const currentStock = Number(currentProd.stock) || 0;
+              const newStock = Math.max(0, currentStock - qty);
+
+              const { error: updErr } = await supabase
+                .from('products')
+                .update({ stock: newStock })
+                .eq('id', item.id);
+
+              if (updErr) {
+                console.error('❌ Erreur mise à jour stock produit:', updErr);
+              }
+            }
+          }
+
+          // Email de confirmation par fournisseur
+          if (customerEmail) {
+            await sendOrderEmail(customerEmail, order.id, supplierName, supplierAmount);
+          }
+        }
+
+        // on répond au webhook
+        return res.send();
+      }
+    }
+
+    // ✅ FALLBACK : ancienne logique (compat sessions plus anciennes)
+    const { supplierId, supplierName, productIds } = metadata;
+    if (supplierId && productIds) {
+      let products = [];
+      try {
+        products = JSON.parse(productIds);
+      } catch (e) {
+        console.error('❌ Impossible de parser productIds legacy:', e);
+      }
+
+      const { data: order, error } = await supabase
+        .from('orders')
+        .insert([
+          {
+            buyer_id: userId,
+            supplier_id: supplierId,
+            total_amount: amount,
+            status: 'pending',
+            payment_term: 'pay_now',
+            payment_status: 'paid',
+          },
+        ])
+        .select()
+        .single();
+
+      if (!error && order) {
+        for (const prodId of products) {
+          const { data: p } = await supabase
+            .from('products')
+            .select('price')
+            .eq('id', prodId)
+            .single();
+
+          if (p) {
+            await supabase.from('order_items').insert([
+              {
+                order_id: order.id,
+                product_id: prodId,
+                quantity: 1,
+                price_at_purchase: p.price,
+              },
+            ]);
+          }
+        }
+
+        if (customerEmail) {
+          await sendOrderEmail(
+            customerEmail,
+            order.id,
+            supplierName || 'Fournisseur',
+            amount
+          );
+        }
+      } else {
+        console.error('Erreur insertion commande Supabase (legacy):', error);
+      }
+    }
+  }
+
+  res.send();
+});
+
+// --- API 3 : GÉNÉRER L'ÉTIQUETTE SHIPPO ---
+app.post('/api/create-label', async (req, res) => {
+  try {
+    const { order_id } = req.body;
+    const SHIPPO_KEY = process.env.SHIPPO_KEY;
+
+    if (!SHIPPO_KEY) {
+      return res
+        .status(500)
+        .json({ error: 'Configuration serveur: Clé Shippo manquante' });
+    }
+
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        buyer: profiles!buyer_id (email, company_name, address_line1, city, state, postal_code, phone),
+        supplier: profiles!supplier_id (email, company_name, address_line1, city, state, postal_code, phone)
+      `)
+      .eq('id', order_id)
+      .single();
+
+    if (error || !order)
+      return res.status(404).json({ error: 'Commande introuvable' });
+
+    const payload = {
+      address_from: {
+        name: order.supplier?.company_name || 'Fournisseur',
+        street1: order.supplier?.address_line1,
+        city: order.supplier?.city,
+        state: order.supplier?.state,
+        zip: order.supplier?.postal_code,
+        country: 'CA',
+        phone: order.supplier?.phone || '5555555555',
+        email: order.supplier?.email,
+      },
+      address_to: {
+        name: order.buyer?.company_name || 'Client',
+        street1: order.buyer?.address_line1,
+        city: order.buyer?.city,
+        state: order.buyer?.state,
+        zip: order.buyer?.postal_code,
+        country: 'CA',
+        phone: order.buyer?.phone || '5555555555',
+        email: order.buyer?.email,
+      },
+      parcels: [
+        {
+          length: '10',
+          width: '10',
+          height: '10',
+          distance_unit: 'in',
+          weight: '2',
+          mass_unit: 'kg',
+        },
+      ],
+      async: false,
+    };
+
+    const shippoResponse = await fetch('https://api.goshippo.com/shipments/', {
+      method: 'POST',
+      headers: {
+        Authorization: `ShippoToken ${SHIPPO_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const shipment = await shippoResponse.json();
+
+    if (!shipment.rates || shipment.rates.length === 0) {
+      return res
+        .status(400)
+        .json({ error: 'Aucun tarif trouvé pour cette adresse.' });
+    }
+
+    const rate = shipment.rates[0];
+    const transactionResponse = await fetch(
+      'https://api.goshippo.com/transactions/',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `ShippoToken ${SHIPPO_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rate: rate.object_id,
+          label_file_type: 'PDF_4x6',
+        }),
+      }
+    );
+
+    const transaction = await transactionResponse.json();
+
+    if (transaction.status !== 'SUCCESS') {
+      return res
+        .status(400)
+        .json({ error: 'Erreur achat étiquette', details: transaction.messages });
+    }
+
+    res.json({
+      success: true,
+      label_url: transaction.label_url,
+      tracking_number: transaction.tracking_number,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- SERVIR LE FRONTEND (React) ---
+app.use(express.static(path.join(__dirname, 'dist')));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
