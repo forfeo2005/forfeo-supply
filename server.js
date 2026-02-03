@@ -4,22 +4,172 @@ import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
+import Stripe from 'stripe';
+import sgMail from '@sendgrid/mail';
 
 // Configuration du serveur
 const app = express();
 const port = process.env.PORT || 3000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Initialisation des services tiers
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-// Connexion Supabase (Côté Serveur - Privé)
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+// Connexion Supabase (Backend)
+// Note: On utilise SUPABASE_SERVICE_KEY ici pour avoir les droits d'écriture via le Webhook
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- API : GÉNÉRER L'ÉTIQUETTE SHIPPO ---
+// --- MIDDLEWARE SPÉCIAL ---
+// Le Webhook Stripe a besoin du corps "brut" (raw), les autres routes du JSON.
+app.use((req, res, next) => {
+  if (req.originalUrl === '/webhook') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
+app.use(cors({ origin: '*' }));
+
+// --- FONCTION UTILITAIRE : ENVOI EMAIL SENDGRID ---
+const sendOrderEmail = async (toEmail, orderId, supplierName, amount) => {
+  const msg = {
+    to: toEmail,
+    from: 'ton-email-verifie-sendgrid@example.com', // ⚠️ REMPLACE PAR TON EMAIL VALIDÉ SENDGRID
+    subject: `Confirmation de commande #${orderId.slice(0,8)} - Forfeo`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h1 style="color: #059669;">Paiement confirmé !</h1>
+        <p>Merci pour votre commande sur Forfeo Market.</p>
+        <hr style="border: 1px solid #eee;">
+        <p><strong>Commande :</strong> #${orderId}</p>
+        <p><strong>Fournisseur :</strong> ${supplierName}</p>
+        <p><strong>Montant payé :</strong> ${amount.toFixed(2)}$ CAD</p>
+        <br>
+        <p>Le fournisseur a été notifié et prépare votre expédition.</p>
+      </div>
+    `,
+  };
+  try {
+    await sgMail.send(msg);
+    console.log('📧 Email envoyé à', toEmail);
+  } catch (error) {
+    console.error('❌ Erreur SendGrid:', error);
+  }
+};
+
+// --- API 1 : CRÉER SESSION DE PAIEMENT (STRIPE) ---
+app.post('/api/create-checkout-session', async (req, res) => {
+  try {
+    const { cart, userId, userEmail } = req.body;
+    const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+    // Préparation des articles pour Stripe
+    const line_items = cart.map(item => ({
+      price_data: {
+        currency: 'cad',
+        product_data: {
+          name: item.name,
+          description: `Vendu par ${item.producer || 'Fournisseur'}`,
+          images: item.image_url && item.image_url !== 'default' ? [item.image_url] : [],
+        },
+        unit_amount: Math.round(item.price * 100), // En cents
+      },
+      quantity: 1, // Ajuster selon ta logique panier
+    }));
+
+    // Création de la session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: line_items,
+      mode: 'payment',
+      success_url: `${CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${CLIENT_URL}/cart`,
+      customer_email: userEmail,
+      metadata: {
+        userId: userId,
+        // On passe les infos essentielles pour le webhook
+        supplierId: cart[0].supplier_id,
+        supplierName: cart[0].producer || "Fournisseur",
+        productIds: JSON.stringify(cart.map(c => c.id))
+      },
+    });
+
+    res.json({ url: session.url });
+
+  } catch (error) {
+    console.error("Erreur Stripe Session:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- API 2 : WEBHOOK STRIPE (Sécurité & Enregistrement Commande) ---
+app.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err) {
+    console.error(`⚠️ Webhook Error: ${err.message}`);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Traitement du paiement réussi
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const { userId, supplierId, supplierName, productIds } = session.metadata;
+    const products = JSON.parse(productIds);
+    const amount = session.amount_total / 100;
+
+    console.log(`💰 Paiement reçu pour la commande de ${session.customer_details.email}`);
+
+    // A. Enregistrer la commande dans Supabase
+    const { data: order, error } = await supabase
+      .from('orders')
+      .insert([{
+        buyer_id: userId,
+        supplier_id: supplierId,
+        total_amount: amount,
+        status: 'pending',
+        payment_term: 'pay_now',
+        payment_status: 'paid'
+      }])
+      .select()
+      .single();
+
+    if (!error && order) {
+      // B. Enregistrer les articles
+      for (const prodId of products) {
+        // On récupère le prix pour l'historique
+        const { data: p } = await supabase.from('products').select('price').eq('id', prodId).single();
+        if (p) {
+           await supabase.from('order_items').insert([{
+             order_id: order.id,
+             product_id: prodId,
+             quantity: 1,
+             price_at_purchase: p.price
+           }]);
+           // Diminution du stock (Optionnel si géré par trigger SQL, sinon on le fait ici)
+           // await supabase.rpc('decrement_stock', { row_id: prodId, quantity: 1 });
+        }
+      }
+
+      // C. Envoyer Email de confirmation
+      await sendOrderEmail(session.customer_details.email, order.id, supplierName, amount);
+    } else {
+      console.error("Erreur insertion commande Supabase:", error);
+    }
+  }
+
+  res.send();
+});
+
+// --- API 3 : GÉNÉRER L'ÉTIQUETTE SHIPPO (Ton code existant) ---
 app.post('/api/create-label', async (req, res) => {
   try {
     const { order_id } = req.body;
@@ -29,7 +179,6 @@ app.post('/api/create-label', async (req, res) => {
       return res.status(500).json({ error: "Configuration serveur: Clé Shippo manquante" });
     }
 
-    // 1. Récupérer les infos de la commande dans Supabase
     const { data: order, error } = await supabase
       .from('orders')
       .select(`
@@ -42,7 +191,6 @@ app.post('/api/create-label', async (req, res) => {
 
     if (error || !order) return res.status(404).json({ error: "Commande introuvable" });
 
-    // 2. Préparer les données pour Shippo
     const payload = {
       address_from: {
         name: order.supplier.company_name || "Fournisseur",
@@ -71,7 +219,6 @@ app.post('/api/create-label', async (req, res) => {
       async: false
     };
 
-    // 3. Appel à l'API Shippo
     const shippoResponse = await fetch('https://api.goshippo.com/shipments/', {
       method: 'POST',
       headers: {
@@ -87,7 +234,6 @@ app.post('/api/create-label', async (req, res) => {
       return res.status(400).json({ error: "Aucun tarif trouvé pour cette adresse." });
     }
 
-    // 4. Acheter l'étiquette la moins chère
     const rate = shipment.rates[0];
     const transactionResponse = await fetch('https://api.goshippo.com/transactions/', {
       method: 'POST',
@@ -104,7 +250,6 @@ app.post('/api/create-label', async (req, res) => {
       return res.status(400).json({ error: "Erreur achat étiquette", details: transaction.messages });
     }
 
-    // 5. Succès ! On renvoie l'URL
     res.json({ 
       success: true, 
       label_url: transaction.label_url, 
@@ -118,10 +263,8 @@ app.post('/api/create-label', async (req, res) => {
 });
 
 // --- SERVIR LE FRONTEND (React) ---
-// En production, le serveur renvoie les fichiers statiques de Vite
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Pour toutes les autres routes, renvoyer l'app React (SPA)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
