@@ -12,7 +12,8 @@ import Dashboard from './pages/Dashboard';
 import Privacy from './pages/Privacy';
 import MerchantDashboard from './pages/MerchantDashboard';
 import AdminDashboard from './pages/AdminDashboard';
-import Cart from './pages/Cart'; // <--- NOUVEAU : Import du Panier
+import Cart from './pages/Cart';
+import Success from './pages/Success'; // <--- NOUVEAU : Import de la page Succès
 
 // Création d'un Layout standard pour les pages publiques
 // Cela permet d'avoir le Header en haut et le Footer en bas sur toutes ces pages
@@ -50,6 +51,9 @@ function App() {
           
           {/* 3. ROUTE PANIER (Accessible via le Layout standard) */}
           <Route path="/cart" element={<Layout><Cart /></Layout>} />
+          
+          {/* 4. ROUTE SUCCÈS (Après paiement) */}
+          <Route path="/success" element={<Layout><Success /></Layout>} />
           
           {/* Route pour la conformité légale */}
           <Route path="/privacy" element={<Layout><Privacy /></Layout>} />
