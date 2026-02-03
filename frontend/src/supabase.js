@@ -1,10 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 
-// URL de ton projet Supabase
-const supabaseUrl = 'https://pvpztslxriczpooaicvc.supabase.co';
+// ⚠️ Mets ces variables dans Render (ou .env en local)
+// VITE_SUPABASE_URL=https://xxxx.supabase.co
+// VITE_SUPABASE_ANON_KEY=eyJhbGciOi... (anon/public)
 
-// Ta Clé Publique (Safe pour le frontend)
-const supabaseKey = 'sb_publishable_EN5HvTEviUmhSea3nNcYXg_N9hgjFim';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Création du client pour se connecter à la base de données
-export const supabase = createClient(supabaseUrl, supabaseKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+  // Ne casse pas le build, mais aide énormément au debug
+  console.error('❌ Variables Supabase manquantes: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    // iOS/Safari: localStorage est OK en général, mais on explicite
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  },
+});
