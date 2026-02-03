@@ -1,146 +1,397 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { supabase } from '../supabase';
-import { Trash2, CreditCard, Calendar, Truck, CheckCircle } from 'lucide-react';
+import { Trash2, CreditCard, Calendar, Truck, CheckCircle, Minus, Plus } from 'lucide-react';
 
 const Cart = () => {
-  const { cart = [], removeFromCart, clearCart, total = 0 } = useCart();
+  // ✅ Fusion compat : CartContext expose cartTotal (string) et cart (array)
+  const {
+    cart = [],
+    removeFromCart,
+    clearCart,
+    updateQuantity,
+    cartTotal,
+  } = useCart();
+
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [paymentTerm, setPaymentTerm] = useState('pay_now'); 
+  const [paymentTerm, setPaymentTerm] = useState('pay_now');
 
-  // LOGIQUE B2B SÉCURISÉE
-  const safeTotal = total || 0;
+  // ✅ Total sécurisé (cartTotal est string "12.34")
+  const safeTotal = useMemo(() => {
+    const n = Number(cartTotal);
+    if (Number.isFinite(n)) return n;
+    // fallback: calc au cas où
+    return cart.reduce((acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1), 0);
+  }, [cartTotal, cart]);
+
   const discount = paymentTerm === 'pay_now' ? safeTotal * 0.02 : 0;
   const finalTotal = safeTotal - discount;
 
+  // Taxes QC (conservé)
+  const taxRate = 0.14975;
+  const taxes = finalTotal * taxRate;
+  const grandTotal = finalTotal + taxes;
+
   const handleCheckout = async () => {
     setLoading(true);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return navigate('/login');
+      if (!user) {
+        navigate('/login');
+        return;
+      }
 
-      // 1. Grouper par fournisseur
+      // ✅ Grouper par fournisseur (avec fallback si supplier_id absent)
       const itemsBySupplier = cart.reduce((acc, item) => {
-        if (!acc[item.supplier_id]) acc[item.supplier_id] = [];
-        acc[item.supplier_id].push(item);
+        const supplierKey = item.supplier_id ?? 'unknown_supplier';
+        if (!acc[supplierKey]) acc[supplierKey] = [];
+        acc[supplierKey].push(item);
         return acc;
       }, {});
 
       // --- PAIEMENT STRIPE ---
       if (paymentTerm === 'pay_now') {
-        // CORRECTION MAJEURE ICI : URL RELATIVE
-        // En production, l'API est sur le même domaine, donc on met une chaine vide.
+        // URL relative en prod (conservé)
         const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
-        
+
         const response = await fetch(`${API_URL}/api/create-checkout-session`, {
-          method: 'POST', 
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cart, userId: user.id, userEmail: user.email })
+          // ✅ On envoie le cart tel quel (avec quantity si présent)
+          body: JSON.stringify({ cart, userId: user.id, userEmail: user.email }),
         });
 
-        // Vérification de sécurité avant de lire le JSON
         if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Erreur Serveur (${response.status}): ${text}`);
+          const text = await response.text();
+          throw new Error(`Erreur Serveur (${response.status}): ${text}`);
         }
 
         const data = await response.json();
         if (data.error) throw new Error(data.error);
-        
-        // Redirection vers Stripe
+
         window.location.href = data.url;
         return;
       }
 
       // --- PAIEMENT DIFFÉRÉ (Net 30 / COD) ---
       for (const [supplierId, items] of Object.entries(itemsBySupplier)) {
-        const supplierTotal = items.reduce((sum, i) => sum + (i.price || 0), 0);
-        
-        const { data: order, error } = await supabase.from('orders').insert([{
+        // ✅ Total fournisseur = somme (price * quantity)
+        const supplierTotal = items.reduce((sum, i) => {
+          const price = Number(i.price) || 0;
+          const qty = Number(i.quantity) || 1;
+          return sum + price * qty;
+        }, 0);
+
+        const { data: order, error } = await supabase
+          .from('orders')
+          .insert([{
             buyer_id: user.id,
-            supplier_id: supplierId,
+            supplier_id: supplierId === 'unknown_supplier' ? null : supplierId,
             total_amount: supplierTotal,
             status: 'pending',
             payment_term: paymentTerm,
-            payment_status: 'pending'
-        }]).select().single();
-        
+            payment_status: 'pending',
+          }])
+          .select()
+          .single();
+
         if (error) throw error;
 
+        // ✅ Créer les items + maj stock en tenant compte de quantity
         for (const item of items) {
-            await supabase.from('order_items').insert([{
-                order_id: order.id,
-                product_id: item.id,
-                quantity: 1,
-                price_at_purchase: item.price
-            }]);
-            // Maj stock
-            const { data: currentProd } = await supabase.from('products').select('stock').eq('id', item.id).single();
-            if (currentProd) await supabase.from('products').update({ stock: currentProd.stock - 1 }).eq('id', item.id);
+          const qty = Number(item.quantity) || 1;
+          const price = Number(item.price) || 0;
+
+          // order_items
+          const { error: itemErr } = await supabase.from('order_items').insert([{
+            order_id: order.id,
+            product_id: item.id,
+            quantity: qty,
+            price_at_purchase: price,
+          }]);
+
+          if (itemErr) throw itemErr;
+
+          // Maj stock (simple, comme ton code, mais avec qty)
+          const { data: currentProd, error: stockErr } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', item.id)
+            .single();
+
+          if (stockErr) throw stockErr;
+
+          if (currentProd) {
+            const currentStock = Number(currentProd.stock) || 0;
+            const newStock = Math.max(0, currentStock - qty);
+
+            const { error: updErr } = await supabase
+              .from('products')
+              .update({ stock: newStock })
+              .eq('id', item.id);
+
+            if (updErr) throw updErr;
+          }
         }
       }
-      alert("Commandes envoyées !");
+
+      alert('Commandes envoyées !');
       clearCart();
       navigate('/merchant');
 
     } catch (error) {
       console.error(error);
-      alert("Erreur: " + error.message);
+      alert('Erreur: ' + (error?.message || 'Erreur inconnue'));
     } finally {
       setLoading(false);
     }
   };
 
-  if (cart.length === 0) return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-      <div className="text-6xl mb-4">🛒</div>
-      <h2 className="text-2xl font-bold text-slate-800">Panier vide</h2>
-      <button onClick={() => navigate('/merchant')} className="mt-4 text-emerald-600 font-bold hover:underline">Retourner au marché</button>
-    </div>
-  );
+  // --- ÉTAT PANIER VIDE ---
+  if (!cart || cart.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="text-6xl mb-4">🛒</div>
+        <h2 className="text-2xl font-extrabold text-slate-800">Panier vide</h2>
+        <button
+          onClick={() => navigate('/market')}
+          className="mt-4 text-emerald-600 font-extrabold hover:underline"
+          type="button"
+        >
+          Retourner au marché
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-slate-900 mb-8">Finaliser la commande</h1>
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-8">
+          <div>
+            <h1 className="text-3xl font-extrabold text-slate-900">Finaliser la commande</h1>
+            <p className="text-slate-500 mt-1">
+              Vérifiez vos articles, choisissez vos modalités de paiement, puis confirmez.
+            </p>
+          </div>
+
+          <Link
+            to="/market"
+            className="text-sm font-extrabold px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 transition w-fit"
+          >
+            Continuer mes achats
+          </Link>
+        </div>
+
         <div className="grid md:grid-cols-3 gap-8">
+          {/* COLONNE GAUCHE */}
           <div className="md:col-span-2 space-y-4">
+            {/* Articles */}
             <div className="bg-white rounded-2xl shadow-sm p-6">
-              <h2 className="font-bold text-lg mb-4">Articles</h2>
-              {cart.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center border-b border-slate-100 last:border-0 py-4">
-                  <div><h3 className="font-bold text-slate-800">{item.name}</h3><p className="text-sm text-slate-500">{item.producer}</p></div>
-                  <div className="flex items-center gap-4"><span className="font-mono font-bold">{(item.price || 0).toFixed(2)}$</span><button onClick={() => removeFromCart(item.id)} className="text-red-400"><Trash2 size={18}/></button></div>
-                </div>
-              ))}
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-extrabold text-lg">Articles</h2>
+                <button
+                  onClick={clearCart}
+                  className="text-sm font-extrabold text-slate-500 hover:text-red-600 transition"
+                  type="button"
+                >
+                  Vider le panier
+                </button>
+              </div>
+
+              {cart.map((item, idx) => {
+                const price = Number(item.price) || 0;
+                const qty = Number(item.quantity) || 1;
+                const lineTotal = price * qty;
+
+                return (
+                  <div
+                    key={item.id ?? idx}
+                    className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-slate-100 last:border-0 py-4 gap-3"
+                  >
+                    <div>
+                      <h3 className="font-extrabold text-slate-800">{item.name}</h3>
+                      <p className="text-sm text-slate-500">
+                        Par {item.producer || 'Fournisseur local'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-4">
+                      {/* Quantité (nouveau mais safe) */}
+                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1">
+                        <button
+                          type="button"
+                          className="p-1 rounded-lg hover:bg-slate-100 transition"
+                          onClick={() => updateQuantity(item.id, Math.max(1, qty - 1))}
+                          aria-label="Diminuer la quantité"
+                        >
+                          <Minus size={16} />
+                        </button>
+
+                        <span className="w-7 text-center font-extrabold text-slate-800">{qty}</span>
+
+                        <button
+                          type="button"
+                          className="p-1 rounded-lg hover:bg-slate-100 transition"
+                          onClick={() => updateQuantity(item.id, qty + 1)}
+                          aria-label="Augmenter la quantité"
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="font-mono font-extrabold text-slate-900">
+                          {lineTotal.toFixed(2)}$
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {price.toFixed(2)}$ / unité
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => removeFromCart(item.id)}
+                        className="text-red-400 hover:text-red-600 transition"
+                        type="button"
+                        aria-label={`Retirer ${item.name}`}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+
+            {/* Paiement */}
             <div className="bg-white rounded-2xl shadow-sm p-6">
-              <h2 className="font-bold text-lg mb-4">Paiement</h2>
+              <h2 className="font-extrabold text-lg mb-4">Paiement</h2>
+
               <div className="grid gap-3">
-                <label className={`cursor-pointer border-2 rounded-xl p-4 flex items-center justify-between transition ${paymentTerm === 'pay_now' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100'}`}>
-                  <div className="flex items-center gap-3"><input type="radio" name="payment" checked={paymentTerm === 'pay_now'} onChange={() => setPaymentTerm('pay_now')} className="text-emerald-600"/><div><span className="font-bold block flex items-center gap-2"><CreditCard size={16}/> Paiement Immédiat</span><span className="text-xs text-emerald-600 font-bold">Escompte 2%</span></div></div>
-                  <span className="font-bold">-{ (safeTotal * 0.02).toFixed(2) }$</span>
+                <label
+                  className={`cursor-pointer border-2 rounded-xl p-4 flex items-center justify-between transition ${
+                    paymentTerm === 'pay_now' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="payment"
+                      checked={paymentTerm === 'pay_now'}
+                      onChange={() => setPaymentTerm('pay_now')}
+                      className="text-emerald-600"
+                    />
+                    <div>
+                      <span className="font-extrabold block flex items-center gap-2">
+                        <CreditCard size={16} /> Paiement immédiat
+                      </span>
+                      <span className="text-xs text-emerald-600 font-extrabold">Escompte 2%</span>
+                    </div>
+                  </div>
+
+                  <span className="font-extrabold text-emerald-700">
+                    -{(safeTotal * 0.02).toFixed(2)}$
+                  </span>
                 </label>
-                <label className={`cursor-pointer border-2 rounded-xl p-4 flex items-center justify-between transition ${paymentTerm === 'net30' ? 'border-blue-500 bg-blue-50' : 'border-slate-100'}`}>
-                  <div className="flex items-center gap-3"><input type="radio" name="payment" checked={paymentTerm === 'net30'} onChange={() => setPaymentTerm('net30')} className="text-blue-600"/><div><span className="font-bold block flex items-center gap-2"><Calendar size={16}/> Net 30 Jours</span></div></div>
+
+                <label
+                  className={`cursor-pointer border-2 rounded-xl p-4 flex items-center justify-between transition ${
+                    paymentTerm === 'net30' ? 'border-blue-500 bg-blue-50' : 'border-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="payment"
+                      checked={paymentTerm === 'net30'}
+                      onChange={() => setPaymentTerm('net30')}
+                      className="text-blue-600"
+                    />
+                    <div>
+                      <span className="font-extrabold block flex items-center gap-2">
+                        <Calendar size={16} /> Net 30 jours
+                      </span>
+                      <span className="text-xs text-slate-500 font-semibold">
+                        Payez plus tard selon vos termes.
+                      </span>
+                    </div>
+                  </div>
                 </label>
-                <label className={`cursor-pointer border-2 rounded-xl p-4 flex items-center justify-between transition ${paymentTerm === 'on_delivery' ? 'border-amber-500 bg-amber-50' : 'border-slate-100'}`}>
-                  <div className="flex items-center gap-3"><input type="radio" name="payment" checked={paymentTerm === 'on_delivery'} onChange={() => setPaymentTerm('on_delivery')} className="text-amber-600"/><div><span className="font-bold block flex items-center gap-2"><Truck size={16}/> COD (Livraison)</span></div></div>
+
+                <label
+                  className={`cursor-pointer border-2 rounded-xl p-4 flex items-center justify-between transition ${
+                    paymentTerm === 'on_delivery' ? 'border-amber-500 bg-amber-50' : 'border-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="payment"
+                      checked={paymentTerm === 'on_delivery'}
+                      onChange={() => setPaymentTerm('on_delivery')}
+                      className="text-amber-600"
+                    />
+                    <div>
+                      <span className="font-extrabold block flex items-center gap-2">
+                        <Truck size={16} /> COD (paiement à la livraison)
+                      </span>
+                      <span className="text-xs text-slate-500 font-semibold">
+                        Une option simple pour certains fournisseurs.
+                      </span>
+                    </div>
+                  </div>
                 </label>
               </div>
             </div>
           </div>
+
+          {/* COLONNE DROITE : Résumé */}
           <div className="bg-white rounded-2xl shadow-lg p-6 h-fit sticky top-8">
-            <h2 className="font-bold text-xl mb-6">Résumé</h2>
+            <h2 className="font-extrabold text-xl mb-6">Résumé</h2>
+
             <div className="space-y-3 text-sm mb-6">
-              <div className="flex justify-between text-slate-500"><span>Sous-total</span><span>{safeTotal.toFixed(2)}$</span></div>
-              {paymentTerm === 'pay_now' && <div className="flex justify-between text-emerald-600 font-bold"><span>Escompte (2%)</span><span>- {discount.toFixed(2)}$</span></div>}
-              <div className="flex justify-between text-slate-500"><span>Taxes (14.975%)</span><span>{(finalTotal * 0.14975).toFixed(2)}$</span></div>
-              <div className="border-t pt-3 flex justify-between text-lg font-black text-slate-900"><span>Total</span><span>{(finalTotal * 1.14975).toFixed(2)}$</span></div>
+              <div className="flex justify-between text-slate-500">
+                <span>Sous-total</span>
+                <span>{safeTotal.toFixed(2)}$</span>
+              </div>
+
+              {paymentTerm === 'pay_now' && (
+                <div className="flex justify-between text-emerald-600 font-extrabold">
+                  <span>Escompte (2%)</span>
+                  <span>- {discount.toFixed(2)}$</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-slate-500">
+                <span>Taxes (14,975%)</span>
+                <span>{taxes.toFixed(2)}$</span>
+              </div>
+
+              <div className="border-t pt-3 flex justify-between text-lg font-black text-slate-900">
+                <span>Total</span>
+                <span>{grandTotal.toFixed(2)}$</span>
+              </div>
             </div>
-            <button onClick={handleCheckout} disabled={loading} className="w-full bg-slate-900 hover:bg-emerald-600 text-white py-4 rounded-xl font-bold flex justify-center items-center gap-2">{loading ? '...' : <><CheckCircle size={20}/> Confirmer</>}</button>
+
+            <button
+              onClick={handleCheckout}
+              disabled={loading}
+              className="w-full bg-slate-900 hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed text-white py-4 rounded-xl font-extrabold flex justify-center items-center gap-2 transition"
+              type="button"
+            >
+              {loading ? '...' : (
+                <>
+                  <CheckCircle size={20} /> Confirmer
+                </>
+              )}
+            </button>
+
+            <p className="mt-4 text-xs text-slate-500 leading-relaxed">
+              En confirmant, vous acceptez que la commande soit transmise aux fournisseurs concernés selon votre modalité de paiement.
+            </p>
           </div>
         </div>
       </div>
