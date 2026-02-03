@@ -5,13 +5,12 @@ import { supabase } from '../supabase';
 import { Trash2, CreditCard, Calendar, Truck, CheckCircle } from 'lucide-react';
 
 const Cart = () => {
-  // SÉCURITÉ : On donne une valeur par défaut à 'cart' et 'total'
   const { cart = [], removeFromCart, clearCart, total = 0 } = useCart();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [paymentTerm, setPaymentTerm] = useState('pay_now'); 
 
-  // LOGIQUE B2B SÉCURISÉE (On vérifie que total existe)
+  // LOGIQUE B2B SÉCURISÉE
   const safeTotal = total || 0;
   const discount = paymentTerm === 'pay_now' ? safeTotal * 0.02 : 0;
   const finalTotal = safeTotal - discount;
@@ -29,22 +28,36 @@ const Cart = () => {
         return acc;
       }, {});
 
-      // SI PAIEMENT STRIPE
+      // --- PAIEMENT STRIPE ---
       if (paymentTerm === 'pay_now') {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        // CORRECTION MAJEURE ICI : URL RELATIVE
+        // En production, l'API est sur le même domaine, donc on met une chaine vide.
+        const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
+        
         const response = await fetch(`${API_URL}/api/create-checkout-session`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cart, userId: user.id, userEmail: user.email })
         });
-        const { url, error } = await response.json();
-        if (error) throw new Error(error);
-        window.location.href = url;
+
+        // Vérification de sécurité avant de lire le JSON
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`Erreur Serveur (${response.status}): ${text}`);
+        }
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+        
+        // Redirection vers Stripe
+        window.location.href = data.url;
         return;
       }
 
-      // SI PAIEMENT DIFFÉRÉ (Net 30 / COD)
+      // --- PAIEMENT DIFFÉRÉ (Net 30 / COD) ---
       for (const [supplierId, items] of Object.entries(itemsBySupplier)) {
         const supplierTotal = items.reduce((sum, i) => sum + (i.price || 0), 0);
+        
         const { data: order, error } = await supabase.from('orders').insert([{
             buyer_id: user.id,
             supplier_id: supplierId,
