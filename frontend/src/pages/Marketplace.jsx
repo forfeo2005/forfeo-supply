@@ -1,5 +1,5 @@
 // frontend/src/pages/Marketplace.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { useCart } from '../context/CartContext';
@@ -11,6 +11,7 @@ const Marketplace = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);          // Gestion d’erreur claire
   const [category, setCategory] = useState('Tout');
+  const [sortBy, setSortBy] = useState('relevance'); // Nouveau : tri
 
   const [searchParams] = useSearchParams();
   const rawSearchTerm = searchParams.get('search') || '';
@@ -37,7 +38,6 @@ const Marketplace = () => {
 
         if (searchTerm) {
           // Recherche large sur name, producer, category
-          // syntaxe Supabase : or("col.ilike.%term%,col2.ilike.%term%")
           const term = `%${searchTerm}%`;
           query = query.or(
             `name.ilike.${term},producer.ilike.${term},category.ilike.${term}`
@@ -65,6 +65,30 @@ const Marketplace = () => {
     fetchProducts();
   }, [category, searchTerm]);
 
+  // -------- TRI DES PRODUITS (FRONTEND, SANS TOUCHER SUPABASE) --------
+  const sortedProducts = useMemo(() => {
+    if (!Array.isArray(products)) return [];
+
+    // On ne touche pas à l'ordre original si "pertinence"
+    if (sortBy === 'relevance') return products;
+
+    const copy = [...products];
+
+    if (sortBy === 'price_asc') {
+      copy.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+    } else if (sortBy === 'price_desc') {
+      copy.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
+    } else if (sortBy === 'name_asc') {
+      copy.sort((a, b) =>
+        (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' })
+      );
+    }
+
+    return copy;
+  }, [products, sortBy]);
+
+  const resultsCount = sortedProducts.length;
+
   return (
     <div className="pt-32 pb-20 min-h-screen bg-slate-50">
       <div className="container mx-auto px-6">
@@ -90,7 +114,7 @@ const Marketplace = () => {
         </div>
 
         {/* Filtres catégories */}
-        <div className="flex flex-wrap justify-center gap-3 mb-10">
+        <div className="flex flex-wrap justify-center gap-3 mb-6">
           {CATEGORY_OPTIONS.map((cat) => (
             <button
               key={cat}
@@ -105,6 +129,39 @@ const Marketplace = () => {
             </button>
           ))}
         </div>
+
+        {/* Barre infos + tri */}
+        {!loading && !error && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8 text-sm">
+            <div className="text-slate-500">
+              {resultsCount > 0 ? (
+                <>
+                  <span className="font-semibold text-slate-800">{resultsCount}</span>{' '}
+                  résultat{resultsCount > 1 ? 's' : ''} trouvé
+                  {searchTerm && <> pour “{searchTerm}”</>}.
+                </>
+              ) : (
+                <>Aucun produit à afficher pour le moment.</>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 text-xs uppercase tracking-wide">
+                Trier par
+              </span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-forfeo-500/40"
+              >
+                <option value="relevance">Pertinence</option>
+                <option value="price_asc">Prix : du plus bas au plus élevé</option>
+                <option value="price_desc">Prix : du plus élevé au plus bas</option>
+                <option value="name_asc">Nom : A → Z</option>
+              </select>
+            </div>
+          </div>
+        )}
 
         {/* États : loading / erreur / vide / liste */}
         {loading && (
@@ -137,7 +194,7 @@ const Marketplace = () => {
           </div>
         )}
 
-        {!loading && !error && products.length === 0 && (
+        {!loading && !error && sortedProducts.length === 0 && (
           <div className="text-center py-16 bg-white rounded-2xl border border-slate-100 max-w-2xl mx-auto">
             <span className="text-4xl block mb-2">🥕</span>
             {searchTerm ? (
@@ -162,9 +219,9 @@ const Marketplace = () => {
           </div>
         )}
 
-        {!loading && !error && products.length > 0 && (
+        {!loading && !error && sortedProducts.length > 0 && (
           <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-8">
-            {products.map((product) => (
+            {sortedProducts.map((product) => (
               <div
                 key={product.id}
                 className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition group"
