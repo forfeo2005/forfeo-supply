@@ -32,7 +32,9 @@ const Resources = () => {
         setResources(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error('Erreur chargement ressources:', err);
-        setError("Impossible de charger les contenus pour le moment. Veuillez réessayer plus tard.");
+        setError(
+          "Impossible de charger les contenus pour le moment. Veuillez réessayer plus tard."
+        );
         setResources([]);
       } finally {
         setLoading(false);
@@ -76,10 +78,12 @@ const Resources = () => {
           </h1>
 
           <p className="mt-3 text-slate-600 max-w-2xl text-sm sm:text-base">
-            Cette section rassemble des guides, checklists et articles pratiques
-            pour aider les entreprises québécoises à mieux gérer{' '}
-            <span className="font-semibold text-slate-800">l&apos;approvisionnement, les relations fournisseurs</span>{' '}
-            et la logistique. L’objectif&nbsp;: vous faire gagner du temps et réduire vos coûts.
+            Cette section rassemble des guides, checklists et articles pratiques pour aider les entreprises
+            québécoises à mieux gérer{' '}
+            <span className="font-semibold text-slate-800">
+              l&apos;approvisionnement, les relations fournisseurs
+            </span>{' '}
+            et la logistique. L’objectif : vous faire gagner du temps, réduire vos coûts et sécuriser vos décisions.
           </p>
         </header>
 
@@ -94,6 +98,7 @@ const Resources = () => {
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -109,6 +114,7 @@ const Resources = () => {
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none"
                 placeholder="Rechercher un sujet (ex : logistique, coût, restaurant...)"
+                aria-label="Rechercher dans les ressources"
               />
             </div>
 
@@ -119,6 +125,7 @@ const Resources = () => {
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                aria-label="Filtrer par catégorie"
               >
                 {CATEGORY_OPTIONS.map((cat) => (
                   <option key={cat} value={cat}>
@@ -132,6 +139,7 @@ const Resources = () => {
                 value={audience}
                 onChange={(e) => setAudience(e.target.value)}
                 className="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                aria-label="Filtrer par audience"
               >
                 {AUDIENCE_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -249,8 +257,6 @@ const Resources = () => {
                       </p>
                     )}
 
-                    {/* Pour l’instant, le détail complet sera géré plus tard.
-                        On affiche un CTA qui explique. */}
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-[11px] text-slate-400">
                         Lecture estimée :{' '}
@@ -259,6 +265,7 @@ const Resources = () => {
                         </span>
                       </span>
 
+                      {/* CTA placeholder : futur détail /slug, non bloquant pour l’instant */}
                       <button
                         type="button"
                         className="text-xs font-bold text-emerald-700 hover:text-emerald-600 hover:underline"
@@ -283,8 +290,9 @@ const Resources = () => {
                 idées pour optimiser vos coûts, et retours d&apos;expérience du terrain.
               </p>
               <p className="text-xs text-slate-400 mt-3">
-                Au fur et à mesure, Forfeo Supply pourra ainsi se positionner
-                comme un partenaire de référence pour l&apos;approvisionnement B2B au Québec.
+                Au fur et à mesure, Forfeo Supply pourra ainsi se positionner comme un
+                partenaire de référence pour l&apos;approvisionnement B2B au Québec,
+                autant pour les acheteurs que pour les fournisseurs locaux.
               </p>
             </div>
 
