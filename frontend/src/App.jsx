@@ -13,8 +13,9 @@ import Privacy from './pages/Privacy';
 import MerchantDashboard from './pages/MerchantDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Cart from './pages/Cart';
-import Success from './pages/Success'; // Page Succès après paiement
-import Resources from './pages/Resources'; // ✅ NOUVEAU : page Ressources / Blog
+import Success from './pages/Success';      // Page Succès après paiement
+import Resources from './pages/Resources';  // Page Ressources / Blog
+import ResourceDetail from './pages/ResourceDetail'; // ✅ NOUVEAU : page détail d'article /resources/:slug
 
 // Layout standard pour les pages publiques
 const Layout = ({ children }) => (
@@ -34,9 +35,9 @@ function App() {
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
         <Routes>
           {/* 1. ROUTES DASHBOARD (Isolées, sans Layout public) */}
-          <Route path="/admin" element={<AdminDashboard />} />          {/* Espace Admin */}
-          <Route path="/dashboard" element={<Dashboard />} />           {/* Ancien espace / Dashboard générique */}
-          <Route path="/merchant" element={<MerchantDashboard />} />    {/* Espace marchand / acheteur selon ton usage */}
+          <Route path="/admin" element={<AdminDashboard />} />       {/* Espace Admin */}
+          <Route path="/dashboard" element={<Dashboard />} />        {/* Ancien espace / Dashboard générique */}
+          <Route path="/merchant" element={<MerchantDashboard />} /> {/* Espace acheteur / comparateur */}
 
           {/* 2. ROUTES PUBLIQUES (Avec Header + Footer via Layout) */}
           <Route
@@ -72,12 +73,22 @@ function App() {
             }
           />
 
-          {/* ✅ NOUVEAU : page Ressources / Blog B2B */}
+          {/* Page Ressources / Blog B2B */}
           <Route
             path="/resources"
             element={
               <Layout>
                 <Resources />
+              </Layout>
+            }
+          />
+
+          {/* ✅ NOUVEAU : page détail article /resources/:slug */}
+          <Route
+            path="/resources/:slug"
+            element={
+              <Layout>
+                <ResourceDetail />
               </Layout>
             }
           />
