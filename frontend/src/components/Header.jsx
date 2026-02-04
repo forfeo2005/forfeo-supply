@@ -96,7 +96,9 @@ const Header = () => {
             className="w-8 h-8 sm:w-10 sm:h-10 transition-transform group-hover:scale-105"
             dark={isDarkLogo}
           />
-          <span className={`text-lg sm:text-xl font-extrabold tracking-tight ${textColorClass} transition-colors`}>
+          <span
+            className={`text-lg sm:text-xl font-extrabold tracking-tight ${textColorClass} transition-colors`}
+          >
             Forfeo
           </span>
         </Link>
@@ -109,6 +111,15 @@ const Header = () => {
           >
             Le Marché
           </Link>
+
+          {/* ✅ Nouveau lien Ressources */}
+          <Link
+            to="/resources"
+            className={`text-sm font-semibold hover:text-emerald-500 transition-colors ${textColorClass} focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded-md px-1 py-1`}
+          >
+            Ressources
+          </Link>
+
           <Link
             to="/about"
             className={`text-sm font-semibold hover:text-emerald-500 transition-colors ${textColorClass} focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded-md px-1 py-1`}
@@ -159,7 +170,7 @@ const Header = () => {
         {/* BOUTON MOBILE */}
         <button
           className={`md:hidden p-2 rounded-lg ${textColorClass} hover:bg-slate-900/5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400/60`}
-          onClick={() => setMobileMenuOpen(v => !v)}
+          onClick={() => setMobileMenuOpen((v) => !v)}
           aria-expanded={mobileMenuOpen}
           aria-controls="mobile-menu"
           aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
@@ -188,6 +199,14 @@ const Header = () => {
               className="text-base font-bold text-slate-800 py-3 px-4 rounded-lg hover:bg-slate-50"
             >
               Le Marché
+            </Link>
+
+            {/* ✅ Lien mobile vers Ressources */}
+            <Link
+              to="/resources"
+              className="text-base font-bold text-slate-800 py-3 px-4 rounded-lg hover:bg-slate-50"
+            >
+              Ressources
             </Link>
 
             <Link
