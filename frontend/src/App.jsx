@@ -13,19 +13,17 @@ import Privacy from './pages/Privacy';
 import MerchantDashboard from './pages/MerchantDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Cart from './pages/Cart';
-import Success from './pages/Success'; // <--- NOUVEAU : Import de la page Succès
+import Success from './pages/Success'; // Page Succès après paiement
+import Resources from './pages/Resources'; // ✅ NOUVEAU : page Ressources / Blog
 
-// Création d'un Layout standard pour les pages publiques
-// Cela permet d'avoir le Header en haut et le Footer en bas sur toutes ces pages
+// Layout standard pour les pages publiques
 const Layout = ({ children }) => (
   <div className="flex flex-col min-h-screen">
-    {/* On utilise le composant Header.jsx qui gère le design transparent/blanc */}
-    <Header /> 
-    
+    {/* Header global */}
+    <Header />
     <main className="flex-grow">
       {children}
     </main>
-    
     <Footer />
   </div>
 );
@@ -34,31 +32,86 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-        
         <Routes>
-          {/* 1. ROUTES DASHBOARD (Isolées) */}
-          {/* Ces pages ont leur propre affichage sans le Header/Footer public */}
-          <Route path="/admin" element={<AdminDashboard />} /> {/* Route Admin */}
-          <Route path="/dashboard" element={<Dashboard />} /> {/* Espace Fournisseur */}
-          <Route path="/merchant" element={<MerchantDashboard />} /> {/* Espace Acheteur */}
-          
-          {/* 2. ROUTES PUBLIQUES (Avec Layout) */}
-          {/* Toutes ces pages auront le Header et le Footer automatiquement */}
-          <Route path="/" element={<Layout><Home /></Layout>} />
-          <Route path="/market" element={<Layout><Marketplace /></Layout>} />
-          <Route path="/about" element={<Layout><About /></Layout>} />
-          <Route path="/login" element={<Layout><Login /></Layout>} />
-          
-          {/* 3. ROUTE PANIER (Accessible via le Layout standard) */}
-          <Route path="/cart" element={<Layout><Cart /></Layout>} />
-          
-          {/* 4. ROUTE SUCCÈS (Après paiement) */}
-          <Route path="/success" element={<Layout><Success /></Layout>} />
-          
-          {/* Route pour la conformité légale */}
-          <Route path="/privacy" element={<Layout><Privacy /></Layout>} />
-        </Routes>
+          {/* 1. ROUTES DASHBOARD (Isolées, sans Layout public) */}
+          <Route path="/admin" element={<AdminDashboard />} />          {/* Espace Admin */}
+          <Route path="/dashboard" element={<Dashboard />} />           {/* Ancien espace / Dashboard générique */}
+          <Route path="/merchant" element={<MerchantDashboard />} />    {/* Espace marchand / acheteur selon ton usage */}
 
+          {/* 2. ROUTES PUBLIQUES (Avec Header + Footer via Layout) */}
+          <Route
+            path="/"
+            element={
+              <Layout>
+                <Home />
+              </Layout>
+            }
+          />
+          <Route
+            path="/market"
+            element={
+              <Layout>
+                <Marketplace />
+              </Layout>
+            }
+          />
+          <Route
+            path="/about"
+            element={
+              <Layout>
+                <About />
+              </Layout>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <Layout>
+                <Login />
+              </Layout>
+            }
+          />
+
+          {/* ✅ NOUVEAU : page Ressources / Blog B2B */}
+          <Route
+            path="/resources"
+            element={
+              <Layout>
+                <Resources />
+              </Layout>
+            }
+          />
+
+          {/* 3. ROUTE PANIER */}
+          <Route
+            path="/cart"
+            element={
+              <Layout>
+                <Cart />
+              </Layout>
+            }
+          />
+
+          {/* 4. ROUTE SUCCÈS (retour Stripe) */}
+          <Route
+            path="/success"
+            element={
+              <Layout>
+                <Success />
+              </Layout>
+            }
+          />
+
+          {/* 5. PAGE CONFIDENTIALITÉ / LÉGALE */}
+          <Route
+            path="/privacy"
+            element={
+              <Layout>
+                <Privacy />
+              </Layout>
+            }
+          />
+        </Routes>
       </div>
     </Router>
   );
