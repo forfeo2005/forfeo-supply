@@ -1,5 +1,6 @@
 // frontend/src/pages/Resources.jsx
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../supabase';
 
 const CATEGORY_OPTIONS = ['Tout', 'Approvisionnement', 'Restauration', 'Bureau', 'Logistique', 'Finances'];
@@ -265,13 +266,19 @@ const Resources = () => {
                         </span>
                       </span>
 
-                      {/* CTA placeholder : futur détail /slug, non bloquant pour l’instant */}
-                      <button
-                        type="button"
-                        className="text-xs font-bold text-emerald-700 hover:text-emerald-600 hover:underline"
-                      >
-                        Lire l&apos;article (bientôt)
-                      </button>
+                      {/* ✅ Lien réel vers la page article si slug présent */}
+                      {item.slug ? (
+                        <Link
+                          to={`/resources/${item.slug}`}
+                          className="text-xs font-bold text-emerald-700 hover:text-emerald-600 hover:underline"
+                        >
+                          Lire l&apos;article
+                        </Link>
+                      ) : (
+                        <span className="text-[11px] font-semibold text-slate-400 italic">
+                          Article bientôt disponible
+                        </span>
+                      )}
                     </div>
                   </article>
                 ))}
