@@ -16,7 +16,7 @@ import {
 
 const MerchantDashboard = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('catalog');
+  const [activeTab, setActiveTab] = useState('overview'); // ✅ nouvelle vue d'ensemble par défaut
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [user, setUser] = useState(null);
 
@@ -48,12 +48,11 @@ const MerchantDashboard = () => {
 
   useEffect(() => {
     const initData = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return navigate('/login');
-      setUser(user);
-      fetchData(user.id);
+      const { data } = await supabase.auth.getUser();
+      const currentUser = data?.user;
+      if (!currentUser) return navigate('/login');
+      setUser(currentUser);
+      fetchData(currentUser.id);
     };
     initData();
   }, [navigate]);
@@ -73,6 +72,9 @@ const MerchantDashboard = () => {
     if (productsData) setProducts(productsData);
 
     // 2. Commandes de l’acheteur
+    // ⚠️ Pour que le fournisseur "reçoive" bien la commande,
+    // il faut que lors de la création de la commande (Checkout),
+    // tu enregistres correctement supplier_id (et/ou côté order_items).
     const { data: ordersData } = await supabase
       .from('orders')
       .select(
@@ -80,7 +82,7 @@ const MerchantDashboard = () => {
          items: order_items (
            quantity,
            price_at_purchase,
-           product: products (name)
+           product: products (name, supplier_id)
          )`
       )
       .eq('buyer_id', userId)
@@ -162,7 +164,15 @@ const MerchantDashboard = () => {
         monthTotal += amt;
       }
 
+      // Si tu as un supplier_id sur la commande, il est pris en compte ici
       if (o.supplier_id) suppliersSet.add(o.supplier_id);
+
+      // Sinon, tu pourrais dériver les fournisseurs à partir des items
+      if (Array.isArray(o.items)) {
+        o.items.forEach((it) => {
+          if (it.product?.supplier_id) suppliersSet.add(it.product.supplier_id);
+        });
+      }
     }
 
     return {
@@ -237,6 +247,15 @@ const MerchantDashboard = () => {
         </div>
         <nav className="flex-1 p-4 space-y-2 mt-20 md:mt-4">
           <NavButton
+            active={activeTab === 'overview'}
+            onClick={() => {
+              setActiveTab('overview');
+              setMobileMenuOpen(false);
+            }}
+            icon={<TrendingUp size={20} />}
+            label="Vue d'ensemble"
+          />
+          <NavButton
             active={activeTab === 'catalog'}
             onClick={() => {
               setActiveTab('catalog');
@@ -288,22 +307,21 @@ const MerchantDashboard = () => {
       </aside>
 
       {/* CONTENU PRINCIPAL */}
-      <main className="flex-1 p-4 md:p-8 pt-20 md:pt-8 overflow-y-auto h-screen bg-slate-50">
-        {/* --- ONGLET MARCHÉ LOCAL --- */}
-        {activeTab === 'catalog' && (
-          <div className="max-w-7xl mx-auto">
-            {/* Header + baseline */}
-            <header className="mb-6">
+      <main className="flex-1 p-4 md:p-8 pt-20 md:pt-8 bg-slate-50">
+        {/* --- ONGLET VUE D'ENSEMBLE --- */}
+        {activeTab === 'overview' && (
+          <div className="max-w-7xl mx-auto space-y-6">
+            <header>
               <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
-                Le Marché Local
+                Tableau de bord achats
               </h1>
-              <p className="text-slate-500">
-                Comparez les prix en temps réel et centralisez vos achats B2B.
+              <p className="text-sm text-slate-500 mt-1">
+                Vue globale de vos dépenses, commandes et fournisseurs.
               </p>
             </header>
 
-            {/* 📊 KPIs Acheteur */}
-            <section className="grid md:grid-cols-4 gap-3 mb-6">
+            {/* KPIs */}
+            <section className="grid md:grid-cols-4 gap-3">
               <KpiCard
                 label="Dépenses ce mois-ci"
                 value={`${monthSpent.toFixed(2)} $`}
@@ -326,8 +344,119 @@ const MerchantDashboard = () => {
               />
             </section>
 
+            {/* Dernières commandes + CTA marché */}
+            <section className="grid md:grid-cols-3 gap-6">
+              <div className="md:col-span-2 bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide">
+                    Dernières commandes
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('orders')}
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-600"
+                  >
+                    Voir toutes les commandes →
+                  </button>
+                </div>
+                {orders.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    Aucune commande pour le moment. Rendez-vous dans le Marché
+                    Local pour passer votre première commande.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-slate-100">
+                    {orders.slice(0, 4).map((o) => (
+                      <li key={o.id} className="py-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">
+                            Commande #{String(o.id).slice(0, 8)}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {o.created_at
+                              ? new Date(o.created_at).toLocaleDateString()
+                              : ''}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-emerald-700">
+                            {Number(o.total_amount || 0).toFixed(2)} $
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {o.status || 'En traitement'}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="bg-slate-900 text-white rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-sm font-extrabold uppercase tracking-wide mb-2">
+                    Centraliser vos achats
+                  </h3>
+                  <p className="text-sm text-slate-200 mb-3">
+                    Utilisez le comparateur Forfeo pour challenger vos prix,
+                    sécuriser vos approvisionnements et gagner du temps.
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    Accédez au Marché Local pour comparer les offres de
+                    plusieurs fournisseurs en quelques clics.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('catalog')}
+                  className="mt-4 w-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold text-sm py-2.5 rounded-xl transition shadow-sm"
+                >
+                  Ouvrir le Marché Local →
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* --- ONGLET MARCHÉ LOCAL --- */}
+        {activeTab === 'catalog' && (
+          <div className="max-w-7xl mx-auto">
+            {/* Header + baseline */}
+            <header className="mb-6">
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
+                Le Marché Local
+              </h1>
+              <p className="text-slate-500">
+                Comparez les prix en temps réel et centralisez vos achats B2B.
+              </p>
+            </header>
+
+            {/* 📊 KPIs Acheteur */}
+            <section className="grid md:grid-cols-4 gap-3 mb-6">
+              <KpiCard
+                label="Dépenses ce mois-ci"
+                value={`${monthSpent.toFixed(2)} $`}
+                helper="Commandes passées dans les 30 derniers jours"
+              />
+            <KpiCard
+                label="Total des commandes"
+                value={`${totalSpent.toFixed(2)} $`}
+                helper={`${ordersCount} commande(s) au total`}
+              />
+              <KpiCard
+                label="Fournisseurs actifs"
+                value={uniqueSuppliersCount}
+                helper="Ayant au moins une commande"
+              />
+              <KpiCard
+                label="Articles en catalogue"
+                value={products.length}
+                helper="Produits actuellement disponibles"
+              />
+            </section>
+
             {/* FILTRES & RECHERCHE + VUE */}
-            <div className="bg-white p-4 rounded-2xl shadow-sm mb-8 flex flex-col md:flex-row gap-4 sticky top-0 z-10 border border-slate-100">
+            <div className="bg-white p-4 rounded-2xl shadow-sm mb-8 flex flex-col md:flex-row gap-4 sticky top-0 md:top-2 z-10 border border-slate-100">
               <div className="relative flex-1">
                 <div className="absolute left-3 top-3 text-slate-400">
                   <Search size={20} />
@@ -417,7 +546,7 @@ const MerchantDashboard = () => {
                 </p>
               </div>
             ) : viewMode === 'cards' ? (
-              /* Vue CARTES (ta vue actuelle améliorée) */
+              /* Vue CARTES */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredProducts.map((product) => {
                   const isBestPrice =
@@ -458,7 +587,6 @@ const MerchantDashboard = () => {
                           Vendu par {product.producer || 'Fournisseur'}
                         </p>
 
-                        {/* Infos B2B rapides (placeholder pour l’instant) */}
                         <p className="text-[11px] text-slate-400 mb-3">
                           Livraison estimée :{' '}
                           <span className="font-semibold">24–72h</span> · Zone :{' '}
@@ -471,7 +599,7 @@ const MerchantDashboard = () => {
                               Prix
                             </span>
                             <span className="font-bold text-xl text-slate-900">
-                              {product.price}$ {' '}
+                              {product.price}$&nbsp;
                               <span className="text-sm font-normal text-slate-400">
                                 /{product.unit}
                               </span>
