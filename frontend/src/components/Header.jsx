@@ -68,18 +68,20 @@ const Header = () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    // onAuthStateChange s’occupe du setUser(null)
+    // onAuthStateChange s'occupe du setUser(null)
     navigate('/');
   };
 
   const isSolid = scrolled || mobileMenuOpen;
 
-  const textColorClass = isSolid ? 'text-slate-900' : 'text-white';
-  const isDarkLogo = isSolid;
+  // MODIFICATION : Toujours utiliser des couleurs contrastées pour les icônes
+  const textColorClass = 'text-slate-800';
+  const iconColorClass = 'text-slate-800';
+  const isDarkLogo = true; // Toujours utiliser le logo sombre pour la visibilité
 
   const headerClassName = useMemo(() => {
     return `fixed w-full z-50 transition-all duration-300 ${
-      isSolid ? 'bg-white/95 backdrop-blur-md shadow-sm py-2' : 'bg-transparent py-4'
+      isSolid ? 'bg-white/95 backdrop-blur-md shadow-sm py-2' : 'bg-white/90 backdrop-blur-sm py-4'
     }`;
   }, [isSolid]);
 
@@ -133,10 +135,10 @@ const Header = () => {
           {/* Panier */}
           <Link
             to="/cart"
-            className={`relative p-2 rounded-full hover:bg-slate-900/5 transition-colors ${textColorClass} focus:outline-none focus:ring-2 focus:ring-emerald-400/60`}
+            className={`relative p-2 rounded-full hover:bg-slate-900/5 transition-colors ${iconColorClass} focus:outline-none focus:ring-2 focus:ring-emerald-400/60`}
             aria-label="Voir le panier"
           >
-            <ShoppingCart size={22} strokeWidth={2.5} />
+            <ShoppingCart size={22} strokeWidth={2.5} className="text-slate-800" />
             {cartCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-extrabold h-4 w-4 flex items-center justify-center rounded-full ring-2 ring-white">
                 {cartCount}
@@ -157,9 +159,7 @@ const Header = () => {
             <Link
               to="/login"
               className={`font-bold text-sm px-4 py-2 rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/60 ${
-                isSolid
-                  ? 'border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white'
-                  : 'border-white text-white hover:bg-white hover:text-slate-900'
+                'border-emerald-600 text-emerald-600 hover:bg-emerald-600 hover:text-white'
               }`}
             >
               Connexion
@@ -169,13 +169,13 @@ const Header = () => {
 
         {/* BOUTON MOBILE */}
         <button
-          className={`md:hidden p-2 rounded-lg ${textColorClass} hover:bg-slate-900/5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400/60`}
+          className={`md:hidden p-2 rounded-lg ${iconColorClass} hover:bg-slate-900/5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400/60`}
           onClick={() => setMobileMenuOpen((v) => !v)}
           aria-expanded={mobileMenuOpen}
           aria-controls="mobile-menu"
           aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
         >
-          {mobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
+          {mobileMenuOpen ? <X size={28} className="text-slate-800" /> : <Menu size={28} className="text-slate-800" />}
         </button>
       </div>
 
@@ -221,7 +221,7 @@ const Header = () => {
               className="text-base font-bold text-slate-800 py-3 px-4 rounded-lg hover:bg-slate-50 flex justify-between items-center bg-slate-50"
             >
               <div className="flex items-center gap-2">
-                <ShoppingCart size={18} /> Mon Panier
+                <ShoppingCart size={18} className="text-slate-800" /> Mon Panier
               </div>
               {cartCount > 0 && (
                 <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-full text-xs font-bold">
