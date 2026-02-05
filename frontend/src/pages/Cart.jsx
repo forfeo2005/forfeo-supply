@@ -13,6 +13,15 @@ import {
   Plus,
 } from 'lucide-react';
 
+// ✅ Base URL des Edge Functions Supabase
+// VITE_SUPABASE_FUNCTIONS_URL = https://pvpztslxriczpooaicvc.supabase.co
+const FUNCTIONS_BASE_URL =
+  import.meta.env.VITE_SUPABASE_FUNCTIONS_URL ||
+  `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+
+// ✅ Clé publique Supabase (anon) – utilisée comme apikey
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
 const Cart = () => {
   // ✅ Panier B2B : on réutilise exactement ton contexte
   const {
@@ -80,28 +89,81 @@ const Cart = () => {
 
       // --- PAIEMENT IMMÉDIAT (STRIPE via EDGE FUNCTION) ---
       if (paymentTerm === 'pay_now') {
-        console.log('📡 Appel Edge Function Stripe -> create-checkout-session');
+        // 1) Récupérer le JWT utilisateur pour Authorization
+        const { data: sessionData, error: sessionError } =
+          await supabase.auth.getSession();
 
-        // 👉 On utilise supabase.functions.invoke pour que Supabase ajoute
-        // automatiquement les bons headers d’auth (Authorization + apikey)
-        const { data, error } = await supabase.functions.invoke(
-          'create-checkout-session',
-          {
-            body: {
+        if (sessionError) {
+          console.error('❌ Erreur getSession Supabase:', sessionError);
+          throw new Error("Impossible de récupérer la session d'authentification.");
+        }
+
+        const accessToken = sessionData?.session?.access_token;
+        if (!accessToken) {
+          throw new Error(
+            "Impossible de récupérer le jeton d'authentification (access_token)."
+          );
+        }
+
+        const endpoint = `${FUNCTIONS_BASE_URL}/create-checkout-session`;
+        console.log('📡 Appel Edge Function Stripe ->', endpoint);
+
+        let response;
+        let raw = '';
+
+        try {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: SUPABASE_ANON_KEY, // requis par Supabase Functions
+              Authorization: `Bearer ${accessToken}`, // ✅ JWT utilisateur
+            },
+            body: JSON.stringify({
               cart,
               userId: user.id,
               userEmail: user.email,
-            },
-          }
+            }),
+          });
+        } catch (networkError) {
+          console.error(
+            '❌ Erreur réseau vers la Edge Function Stripe:',
+            networkError
+          );
+          throw new Error(
+            "Impossible de contacter le serveur de paiement. Vérifie que l'Edge Function est bien déployée."
+          );
+        }
+
+        try {
+          raw = await response.text();
+        } catch (e) {
+          console.error('❌ Impossible de lire la réponse brute du backend:', e);
+        }
+
+        console.log(
+          '🔍 Réponse brute Edge Function Stripe:',
+          response?.status,
+          response?.statusText,
+          raw
         );
 
-        console.log('🔍 Réponse Edge Function Stripe:', { data, error });
+        let data = null;
+        if (raw) {
+          try {
+            data = JSON.parse(raw);
+          } catch (e) {
+            console.error('⚠️ JSON invalide renvoyé par la Edge Function:', raw);
+          }
+        }
 
-        if (error) {
-          console.error('❌ Erreur Edge Function Stripe:', error);
-          throw new Error(
-            `Erreur serveur paiement (HTTP ${error.status || '???'})`
-          );
+        if (!response.ok) {
+          const message =
+            (data && data.error) ||
+            (response.status === 401
+              ? "Erreur d'authentification sur la fonction de paiement (HTTP 401). Vérifie que le JWT est bien accepté dans Supabase."
+              : `Erreur serveur paiement (HTTP ${response.status || '???'}).`);
+          throw new Error(message);
         }
 
         if (!data || !data.url) {
