@@ -1,8 +1,21 @@
+// frontend/src/pages/Cart.jsx
 import React, { useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { supabase } from '../supabase';
-import { Trash2, CreditCard, Calendar, Truck, CheckCircle, Minus, Plus } from 'lucide-react';
+import {
+  Trash2,
+  CreditCard,
+  Calendar,
+  Truck,
+  CheckCircle,
+  Minus,
+  Plus,
+} from 'lucide-react';
+
+// Petit helper pour éviter les erreurs côté SSR
+const isBrowser = typeof window !== 'undefined';
+const CHECKOUT_STORAGE_KEY = 'forfeo_last_checkout';
 
 const Cart = () => {
   // ✅ Panier B2B : on réutilise exactement ton contexte
@@ -71,6 +84,34 @@ const Cart = () => {
 
       // --- PAIEMENT IMMÉDIAT (STRIPE) ---
       if (paymentTerm === 'pay_now') {
+        // ✅ On sauvegarde le checkout en local pour Success.jsx
+        if (isBrowser) {
+          const checkoutPayload = {
+            cart,
+            paymentTerm,
+            userId: user.id,
+            userEmail: user.email ?? null,
+            safeTotal,
+            discount,
+            finalTotal,
+            taxes,
+            grandTotal,
+            createdAt: new Date().toISOString(),
+          };
+
+          try {
+            window.localStorage.setItem(
+              CHECKOUT_STORAGE_KEY,
+              JSON.stringify(checkoutPayload)
+            );
+          } catch (e) {
+            console.warn(
+              '⚠️ Impossible de sauvegarder le checkout localement',
+              e
+            );
+          }
+        }
+
         // URL relative en prod (conservé)
         const API_URL =
           window.location.hostname === 'localhost'
@@ -101,6 +142,7 @@ const Cart = () => {
         const data = await response.json();
         if (data.error) throw new Error(data.error);
 
+        // Stripe prend le relais
         window.location.href = data.url;
         return;
       }
@@ -472,8 +514,10 @@ const Cart = () => {
 
             <div className="space-y-3 text-sm mb-6">
               <div className="flex justify-between text-slate-500">
-                <span>Sous-total ({totalItems} article
-                  {totalItems > 1 ? 's' : ''})</span>
+                <span>
+                  Sous-total ({totalItems} article
+                  {totalItems > 1 ? 's' : ''})
+                </span>
                 <span>{safeTotal.toFixed(2)}$</span>
               </div>
 
