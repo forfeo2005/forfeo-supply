@@ -13,8 +13,12 @@ import {
   Plus,
 } from 'lucide-react';
 
-const CHECKOUT_STORAGE_KEY = 'forfeo_last_checkout';
-const isBrowser = typeof window !== 'undefined';
+// ✅ Base URL de l'API backend (configurable)
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:3000'
+    : ''); // en prod: même domaine que le frontend
 
 const Cart = () => {
   // ✅ Panier B2B : on réutilise exactement ton contexte
@@ -73,7 +77,7 @@ const Cart = () => {
         return;
       }
 
-      // ✅ Groupe par fournisseur (utilisé pour Net30 / COD)
+      // ✅ Grouper par fournisseur (avec fallback si supplier_id absent)
       const itemsBySupplier = cart.reduce((acc, item) => {
         const supplierKey = item.supplier_id ?? 'unknown_supplier';
         if (!acc[supplierKey]) acc[supplierKey] = [];
@@ -81,39 +85,16 @@ const Cart = () => {
         return acc;
       }, {});
 
-      // -----------------------------
-      // 💳 Paiement immédiat (Stripe)
-      // -----------------------------
+      // --- PAIEMENT IMMÉDIAT (STRIPE) ---
       if (paymentTerm === 'pay_now') {
-        // On stocke le checkout pour Success.jsx (création d’orders côté fournisseurs)
-        if (isBrowser) {
-          try {
-            const payload = {
-              cart,
-              userId: user.id,
-              userEmail: user.email,
-              paymentTerm: 'pay_now',
-            };
-            window.localStorage.setItem(
-              CHECKOUT_STORAGE_KEY,
-              JSON.stringify(payload)
-            );
-          } catch (e) {
-            console.warn(
-              '⚠️ Impossible de stocker forfeo_last_checkout dans localStorage',
-              e
-            );
-          }
-        }
+        const endpoint = `${API_BASE_URL}/api/create-checkout-session`;
+        console.log('📡 Appel Stripe backend =>', endpoint);
 
-        const API_URL =
-          window.location.hostname === 'localhost'
-            ? 'http://localhost:3000'
-            : '';
+        let response;
+        let raw = '';
 
-        const response = await fetch(
-          `${API_URL}/api/create-checkout-session`,
-          {
+        try {
+          response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             // ✅ On envoie le cart tel quel (avec quantity si présent)
@@ -122,31 +103,41 @@ const Cart = () => {
               userId: user.id,
               userEmail: user.email,
             }),
-          }
-        );
-
-        // On lit TOUJOURS le texte une seule fois
-        const rawText = await response.text();
-
-        if (!response.ok) {
+          });
+        } catch (networkError) {
+          console.error('❌ Erreur réseau vers le backend Stripe:', networkError);
           throw new Error(
-            `Erreur Serveur (${response.status}): ${
-              rawText || 'Réponse vide du serveur'
-            }`
+            "Impossible de contacter le serveur de paiement. Vérifie que l'API backend est bien en ligne."
           );
         }
 
-        let data;
         try {
-          data = rawText ? JSON.parse(rawText) : null;
+          raw = await response.text();
         } catch (e) {
-          console.error(
-            '⚠️ Réponse non JSON de /api/create-checkout-session :',
-            rawText
-          );
-          throw new Error(
-            "La réponse du serveur de paiement n'est pas au format JSON attendu. Vérifie les logs du backend / Stripe."
-          );
+          console.error('❌ Impossible de lire la réponse brute du backend:', e);
+        }
+
+        console.log(
+          '🔍 Réponse brute Stripe backend:',
+          response?.status,
+          response?.statusText,
+          raw
+        );
+
+        let data = null;
+        if (raw) {
+          try {
+            data = JSON.parse(raw);
+          } catch (e) {
+            console.error('⚠️ JSON invalide renvoyé par le backend Stripe:', raw);
+          }
+        }
+
+        if (!response.ok) {
+          const message =
+            (data && data.error) ||
+            `Erreur serveur (${response.status}) lors de la création de la session de paiement.`;
+          throw new Error(message);
         }
 
         if (!data || !data.url) {
@@ -156,17 +147,13 @@ const Cart = () => {
           );
         }
 
-        // ✅ Redirection vers Stripe
+        // ✅ Tout est bon : on redirige vers Stripe
         window.location.href = data.url;
         return;
       }
 
-      // -----------------------------
-      // 🧾 Paiement différé (Net30 / COD)
-      // -----------------------------
-      for (const [supplierId, items] of Object.entries(
-        itemsBySupplier
-      )) {
+      // --- PAIEMENT DIFFÉRÉ (Net 30 / COD) ---
+      for (const [supplierId, items] of Object.entries(itemsBySupplier)) {
         // ✅ Total fournisseur = somme (price * quantity)
         const supplierTotal = items.reduce((sum, i) => {
           const price = Number(i.price) || 0;
@@ -282,8 +269,7 @@ const Cart = () => {
               Panier entreprise&nbsp;:{' '}
               <span className="font-semibold text-slate-800">
                 {totalItems} article
-                {totalItems > 1 ? 's' : ''} auprès de vos
-                fournisseurs.
+                {totalItems > 1 ? 's' : ''} auprès de vos fournisseurs.
               </span>
             </p>
             <p className="text-slate-400 mt-1 text-xs sm:text-sm">
