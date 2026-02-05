@@ -14,10 +14,8 @@ import {
 } from 'lucide-react';
 
 // ✅ Base URL des Edge Functions Supabase
-// VITE_SUPABASE_FUNCTIONS_URL = https://pvpztslxriczpooaicvc.supabase.co
-const FUNCTIONS_BASE_URL =
-  import.meta.env.VITE_SUPABASE_FUNCTIONS_URL ||
-  `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+// On se base directement sur VITE_SUPABASE_URL : https://xxx.supabase.co/functions/v1
+const FUNCTIONS_BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 // ✅ Clé publique Supabase (anon) – utilisée comme apikey
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
