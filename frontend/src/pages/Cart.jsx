@@ -13,16 +13,6 @@ import {
   Plus,
 } from 'lucide-react';
 
-// ✅ Base URL des Edge Functions Supabase (à mettre dans Render)
-const FUNCTIONS_BASE_URL =
-  import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || '';
-
-if (!FUNCTIONS_BASE_URL) {
-  console.error(
-    '⚠️ VITE_SUPABASE_FUNCTIONS_URL est manquant. Configure-le dans Render (ex: https://xxxx.functions.supabase.co).'
-  );
-}
-
 const Cart = () => {
   // ✅ Panier B2B : on réutilise exactement ton contexte
   const {
@@ -88,98 +78,34 @@ const Cart = () => {
         return acc;
       }, {});
 
-      // --- 💳 PAIEMENT IMMÉDIAT (STRIPE via EDGE FUNCTION SUPABASE) ---
+      // --- PAIEMENT IMMÉDIAT (STRIPE via EDGE FUNCTION) ---
       if (paymentTerm === 'pay_now') {
-        if (!FUNCTIONS_BASE_URL) {
-          throw new Error(
-            "Configuration manquante: VITE_SUPABASE_FUNCTIONS_URL n'est pas défini côté frontend."
-          );
-        }
+        console.log('📡 Appel Edge Function Stripe -> create-checkout-session');
 
-        const origin =
-          typeof window !== 'undefined' ? window.location.origin : '';
-
-        const endpoint = `${FUNCTIONS_BASE_URL}/create-checkout-session`;
-        console.log('📡 Appel Edge Function Stripe =>', endpoint);
-
-        const payload = {
-          cart,
-          userId: user.id,
-          userEmail: user.email,
-          successUrl: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: `${origin}/cart`,
-        };
-
-        let response;
-        let raw = '';
-
-        try {
-          response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-        } catch (networkError) {
-          console.error(
-            '❌ Erreur réseau vers la Edge Function Stripe:',
-            networkError
-          );
-          throw new Error(
-            "Impossible de contacter le serveur de paiement (Edge Function). Vérifie que la fonction Supabase est bien déployée."
-          );
-        }
-
-        const contentType = response.headers.get('content-type') || '';
-
-        if (contentType.includes('application/json')) {
-          try {
-            raw = await response.text();
-          } catch (e) {
-            console.error(
-              '❌ Impossible de lire la réponse brute de la Edge Function:',
-              e
-            );
+        // 👉 On utilise supabase.functions.invoke pour que Supabase ajoute
+        // automatiquement les bons headers d’auth (Authorization + apikey)
+        const { data, error } = await supabase.functions.invoke(
+          'create-checkout-session',
+          {
+            body: {
+              cart,
+              userId: user.id,
+              userEmail: user.email,
+            },
           }
-        } else {
-          // Si ce n'est pas du JSON, on log le texte pour debug
-          try {
-            raw = await response.text();
-          } catch (e) {
-            console.error(
-              '❌ Impossible de lire la réponse brute (non-JSON) de la Edge Function:',
-              e
-            );
-          }
-        }
-
-        console.log(
-          '🔍 Réponse brute Edge Function Stripe:',
-          response?.status,
-          response?.statusText,
-          raw
         );
 
-        let data = null;
-        if (raw) {
-          try {
-            data = JSON.parse(raw);
-          } catch (e) {
-            console.warn(
-              '⚠️ Réponse non-JSON ou JSON invalide renvoyé par la Edge Function:',
-              raw
-            );
-          }
-        }
+        console.log('🔍 Réponse Edge Function Stripe:', { data, error });
 
-        if (!response.ok) {
-          const message =
-            (data && data.error) ||
-            `Erreur serveur paiement (HTTP ${response.status}).`;
-          throw new Error(message);
+        if (error) {
+          console.error('❌ Erreur Edge Function Stripe:', error);
+          throw new Error(
+            `Erreur serveur paiement (HTTP ${error.status || '???'})`
+          );
         }
 
         if (!data || !data.url) {
-          console.error('⚠️ Réponse JSON inattendue (Edge):', data);
+          console.error('⚠️ Réponse JSON inattendue :', data);
           throw new Error(
             "La réponse du serveur de paiement est incomplète (pas d'URL de redirection)."
           );
@@ -190,7 +116,7 @@ const Cart = () => {
         return;
       }
 
-      // --- 🧾 PAIEMENT DIFFÉRÉ (Net 30 / COD) — inchangé ---
+      // --- PAIEMENT DIFFÉRÉ (Net 30 / COD) ---
       for (const [supplierId, items] of Object.entries(itemsBySupplier)) {
         // ✅ Total fournisseur = somme (price * quantity)
         const supplierTotal = items.reduce((sum, i) => {
