@@ -13,9 +13,8 @@ import {
   Plus,
 } from 'lucide-react';
 
-// Petit helper pour éviter les erreurs côté SSR
-const isBrowser = typeof window !== 'undefined';
 const CHECKOUT_STORAGE_KEY = 'forfeo_last_checkout';
+const isBrowser = typeof window !== 'undefined';
 
 const Cart = () => {
   // ✅ Panier B2B : on réutilise exactement ton contexte
@@ -74,7 +73,7 @@ const Cart = () => {
         return;
       }
 
-      // ✅ Grouper par fournisseur (avec fallback si supplier_id absent)
+      // ✅ Groupe par fournisseur (utilisé pour Net30 / COD)
       const itemsBySupplier = cart.reduce((acc, item) => {
         const supplierKey = item.supplier_id ?? 'unknown_supplier';
         if (!acc[supplierKey]) acc[supplierKey] = [];
@@ -82,37 +81,31 @@ const Cart = () => {
         return acc;
       }, {});
 
-      // --- PAIEMENT IMMÉDIAT (STRIPE) ---
+      // -----------------------------
+      // 💳 Paiement immédiat (Stripe)
+      // -----------------------------
       if (paymentTerm === 'pay_now') {
-        // ✅ On sauvegarde le checkout en local pour Success.jsx
+        // On stocke le checkout pour Success.jsx (création d’orders côté fournisseurs)
         if (isBrowser) {
-          const checkoutPayload = {
-            cart,
-            paymentTerm,
-            userId: user.id,
-            userEmail: user.email ?? null,
-            safeTotal,
-            discount,
-            finalTotal,
-            taxes,
-            grandTotal,
-            createdAt: new Date().toISOString(),
-          };
-
           try {
+            const payload = {
+              cart,
+              userId: user.id,
+              userEmail: user.email,
+              paymentTerm: 'pay_now',
+            };
             window.localStorage.setItem(
               CHECKOUT_STORAGE_KEY,
-              JSON.stringify(checkoutPayload)
+              JSON.stringify(payload)
             );
           } catch (e) {
             console.warn(
-              '⚠️ Impossible de sauvegarder le checkout localement',
+              '⚠️ Impossible de stocker forfeo_last_checkout dans localStorage',
               e
             );
           }
         }
 
-        // URL relative en prod (conservé)
         const API_URL =
           window.location.hostname === 'localhost'
             ? 'http://localhost:3000'
@@ -132,22 +125,45 @@ const Cart = () => {
           }
         );
 
+        // On lit TOUJOURS le texte une seule fois
+        const rawText = await response.text();
+
         if (!response.ok) {
-          const text = await response.text();
           throw new Error(
-            `Erreur Serveur (${response.status}): ${text}`
+            `Erreur Serveur (${response.status}): ${
+              rawText || 'Réponse vide du serveur'
+            }`
           );
         }
 
-        const data = await response.json();
-        if (data.error) throw new Error(data.error);
+        let data;
+        try {
+          data = rawText ? JSON.parse(rawText) : null;
+        } catch (e) {
+          console.error(
+            '⚠️ Réponse non JSON de /api/create-checkout-session :',
+            rawText
+          );
+          throw new Error(
+            "La réponse du serveur de paiement n'est pas au format JSON attendu. Vérifie les logs du backend / Stripe."
+          );
+        }
 
-        // Stripe prend le relais
+        if (!data || !data.url) {
+          console.error('⚠️ Réponse JSON inattendue :', data);
+          throw new Error(
+            "La réponse du serveur de paiement est incomplète (pas d'URL de redirection)."
+          );
+        }
+
+        // ✅ Redirection vers Stripe
         window.location.href = data.url;
         return;
       }
 
-      // --- PAIEMENT DIFFÉRÉ (Net 30 / COD) ---
+      // -----------------------------
+      // 🧾 Paiement différé (Net30 / COD)
+      // -----------------------------
       for (const [supplierId, items] of Object.entries(
         itemsBySupplier
       )) {
@@ -266,7 +282,8 @@ const Cart = () => {
               Panier entreprise&nbsp;:{' '}
               <span className="font-semibold text-slate-800">
                 {totalItems} article
-                {totalItems > 1 ? 's' : ''} auprès de vos fournisseurs.
+                {totalItems > 1 ? 's' : ''} auprès de vos
+                fournisseurs.
               </span>
             </p>
             <p className="text-slate-400 mt-1 text-xs sm:text-sm">
