@@ -55,7 +55,7 @@ const Cart = () => {
   const taxes = finalTotal * taxRate;
   const grandTotal = finalTotal + taxes;
 
-  // Nombre total d’articles (vue B2B claire)
+  // Nombre total d'articles (vue B2B claire)
   const totalItems = useMemo(
     () =>
       cart.reduce(
@@ -103,8 +103,26 @@ const Cart = () => {
           );
         }
 
+        console.log('🔐 Token JWT disponible, premiers 20 caractères:', accessToken.substring(0, 20) + '...');
+
+        // 2) Préparer les données du panier pour Stripe
+        const cartForStripe = cart.map(item => ({
+          id: item.id,
+          name: item.name || 'Produit',
+          price: Number(item.price) || 0,
+          quantity: Math.max(1, Number(item.quantity) || 1),
+          supplier_id: item.supplier_id || null,
+          producer: item.producer || 'Fournisseur',
+          image_url: item.image_url && item.image_url !== 'default' ? item.image_url : null,
+        }));
+
         const endpoint = `${FUNCTIONS_BASE_URL}/create-checkout-session`;
         console.log('📡 Appel Edge Function Stripe ->', endpoint);
+        console.log('🛒 Données envoyées:', {
+          cart: cartForStripe,
+          userEmail: user.email,
+          userId: user.id,
+        });
 
         let response;
         let raw = '';
@@ -114,13 +132,12 @@ const Cart = () => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              apikey: SUPABASE_ANON_KEY, // requis par Supabase Functions
-              Authorization: `Bearer ${accessToken}`, // ✅ JWT utilisateur
+              'Authorization': `Bearer ${accessToken}`, // ✅ SEUL HEADER REQUIS
             },
             body: JSON.stringify({
-              cart,
-              userId: user.id,
-              userEmail: user.email,
+              cart: cartForStripe,
+              successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+              cancelUrl: `${window.location.origin}/cart`,
             }),
           });
         } catch (networkError) {
@@ -133,18 +150,13 @@ const Cart = () => {
           );
         }
 
+        // 3) Traiter la réponse
         try {
           raw = await response.text();
+          console.log('🔍 Réponse brute Edge Function Stripe:', response?.status, raw?.substring(0, 200) + '...');
         } catch (e) {
           console.error('❌ Impossible de lire la réponse brute du backend:', e);
         }
-
-        console.log(
-          '🔍 Réponse brute Edge Function Stripe:',
-          response?.status,
-          response?.statusText,
-          raw
-        );
 
         let data = null;
         if (raw) {
@@ -156,12 +168,13 @@ const Cart = () => {
         }
 
         if (!response.ok) {
-          const message =
-            (data && data.error) ||
-            (response.status === 401
-              ? "Erreur d'authentification sur la fonction de paiement (HTTP 401). Vérifie que le JWT est bien accepté dans Supabase."
-              : `Erreur serveur paiement (HTTP ${response.status || '???'}).`);
-          throw new Error(message);
+          const errorMessage = data?.error || 
+                              (response.status === 401 ? 
+                                "Erreur d'authentification. Votre session a peut-être expiré. Veuillez vous reconnecter." : 
+                                `Erreur serveur (HTTP ${response.status})`);
+          
+          const details = data?.details || data?.message || '';
+          throw new Error(`${errorMessage} ${details ? `- ${details}` : ''}`);
         }
 
         if (!data || !data.url) {
@@ -172,6 +185,7 @@ const Cart = () => {
         }
 
         // ✅ Tout est bon : on redirige vers Stripe
+        console.log('✅ Redirection vers Stripe:', data.url);
         window.location.href = data.url;
         return;
       }
@@ -254,7 +268,7 @@ const Cart = () => {
       clearCart();
       navigate('/merchant');
     } catch (error) {
-      console.error(error);
+      console.error('💥 Erreur complète dans handleCheckout:', error);
       alert('Erreur: ' + (error?.message || 'Erreur inconnue'));
     } finally {
       setLoading(false);
@@ -353,7 +367,7 @@ const Cart = () => {
                     </div>
 
                     <div className="flex items-center justify-between sm:justify-end gap-4">
-                      {/* Quantité : contrôle simple pour l’acheteur */}
+                      {/* Quantité : contrôle simple pour l'acheteur */}
                       <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1">
                         <button
                           type="button"
@@ -528,7 +542,7 @@ const Cart = () => {
                   Forfeo Supply transmet vos commandes aux fournisseurs
                   concernés. Pour le paiement immédiat, la transaction
                   est réglée en ligne. Pour le Net 30 et le COD, la
-                  facturation et l&apos;encaissement suivent vos ententes
+                  facturation et l'encaissement suivent vos ententes
                   B2B avec les fournisseurs.
                 </p>
               </div>
