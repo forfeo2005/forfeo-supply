@@ -1,155 +1,131 @@
 // frontend/src/components/ForfeoLogo.jsx
 import React from 'react';
 
-const ForfeoLogo = ({ className = "w-10 h-10", dark = false, withText = false }) => {
-  // Palette 2026 chic : gris anthracite, émeraude et doré
+const ForfeoLogo = ({ className = "w-10 h-10", dark = false, withText = false, size = "md" }) => {
+  // Palette 2026 chic : émeraude, or, gris anthracite
   const primaryColor = dark ? "#111827" : "#FFFFFF";
   const accentColor = dark ? "#059669" : "#10B981";
   const goldAccent = "#D4AF37";
-  const lightAccent = "#60A5FA";
+  const lightGray = "#6B7280";
+  
+  // Tailles responsive
+  const dimensions = {
+    sm: "w-6 h-6",
+    md: "w-8 h-8",
+    lg: "w-10 h-10",
+    xl: "w-12 h-12"
+  }[size];
 
   return (
     <div className="flex items-center gap-2">
-      {/* Icône monogramme élégant */}
+      {/* Icône monogramme élégant FS */}
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 200 200"
-        className={`${className} transition-all duration-300`}
+        viewBox="0 0 100 100"
+        className={`${dimensions} ${className} transition-all duration-300`}
       >
         <defs>
           {/* Gradient chic pour 2026 */}
           <linearGradient id="forfeo-gradient-2026" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor={accentColor} stopOpacity="0.9" />
-            <stop offset="50%" stopColor={goldAccent} stopOpacity="0.8" />
-            <stop offset="100%" stopColor={lightAccent} stopOpacity="0.9" />
+            <stop offset="50%" stopColor={goldAccent} stopOpacity="0.7" />
+            <stop offset="100%" stopColor={accentColor} stopOpacity="0.9" />
           </linearGradient>
-
-          {/* Effet brillance subtile */}
-          <filter id="forfeo-glow-2026">
-            <feGaussianBlur stdDeviation="2" result="coloredBlur" />
-            <feMerge>
-              <feMergeNode in="coloredBlur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-
-          {/* Masque pour le monogramme FS */}
-          <clipPath id="forfeo-clip">
-            <path d="M50,50 L150,50 L150,150 L50,150 Z" />
-          </clipPath>
+          
+          {/* Gradient pour le texte */}
+          <linearGradient id="text-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={accentColor} />
+            <stop offset="50%" stopColor={goldAccent} />
+            <stop offset="100%" stopColor={accentColor} />
+          </linearGradient>
         </defs>
 
-        {/* Cercle de fond avec gradient */}
+        {/* Cercle de fond avec effet verre */}
         <circle
-          cx="100"
-          cy="100"
-          r="90"
+          cx="50"
+          cy="50"
+          r="45"
           fill="url(#forfeo-gradient-2026)"
-          opacity="0.9"
-          className="transition-all duration-500 hover:opacity-100"
+          opacity="0.95"
+          className="transition-all duration-500"
+        />
+        
+        {/* Effet de lumière */}
+        <circle
+          cx="30"
+          cy="30"
+          r="15"
+          fill="white"
+          opacity="0.1"
         />
 
-        {/* Monogramme FS stylisé */}
-        <g clipPath="url(#forfeo-clip)" filter="url(#forfeo-glow-2026)">
-          {/* Lettre F - Design moderne */}
-          <path
-            d="M65,60 L65,140 L95,140 L95,100 L80,100 L80,80 L95,80 L95,60 Z"
-            fill={primaryColor}
-            className="transition-all duration-300"
-          />
-          
-          {/* Lettre S - Design fluide */}
-          <path
-            d="M110,60 C130,60 140,75 140,100 C140,125 130,140 110,140 C90,140 80,125 80,100 C80,75 90,60 110,60 Z"
-            fill="none"
-            stroke={primaryColor}
-            strokeWidth="8"
-            strokeLinecap="round"
-            className="transition-all duration-300"
-          />
-          <path
-            d="M110,65 C125,65 135,75 135,100 C135,125 125,135 110,135 C95,135 85,125 85,100 C85,75 95,65 110,65 Z"
-            fill="none"
-            stroke={goldAccent}
-            strokeWidth="4"
-            strokeLinecap="round"
-            className="transition-all duration-300"
-          />
+        {/* Monogramme FS minimaliste et chic */}
+        {/* Lettre F stylisée */}
+        <path
+          d="M35,30 L35,70 L50,70 L50,55 L42,55 L42,45 L50,45 L50,30 Z"
+          fill={primaryColor}
+          className="transition-all duration-300"
+        />
+        
+        {/* Lettre S stylisée */}
+        <path
+          d="M55,30 C65,30 70,40 70,50 C70,60 65,70 55,70 C45,70 40,60 40,50 C40,40 45,30 55,30 Z"
+          fill="none"
+          stroke={primaryColor}
+          strokeWidth="5"
+          strokeLinecap="round"
+          className="transition-all duration-300"
+        />
+        <path
+          d="M55,35 C62,35 65,40 65,50 C65,60 62,65 55,65 C48,65 45,60 45,50 C45,40 48,35 55,35 Z"
+          fill="none"
+          stroke={goldAccent}
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
 
-          {/* Éléments décoratifs modernes */}
-          <circle
-            cx="100"
-            cy="100"
-            r="8"
-            fill={goldAccent}
-            className="animate-pulse"
-          >
-            <animate
-              attributeName="r"
-              values="8;12;8"
-              dur="3s"
-              repeatCount="indefinite"
-            />
-          </circle>
-
-          {/* Lignes géométriques élégantes */}
-          <line
-            x1="45"
-            y1="100"
-            x2="65"
-            y2="100"
-            stroke={accentColor}
-            strokeWidth="3"
-            strokeLinecap="round"
+        {/* Point central élégant */}
+        <circle
+          cx="50"
+          cy="50"
+          r="3"
+          fill={goldAccent}
+          className="animate-pulse"
+        >
+          <animate
+            attributeName="r"
+            values="3;5;3"
+            dur="2s"
+            repeatCount="indefinite"
           />
-          <line
-            x1="135"
-            y1="100"
-            x2="155"
-            y2="100"
-            stroke={accentColor}
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-          <line
-            x1="100"
-            y1="45"
-            x2="100"
-            y2="65"
-            stroke={goldAccent}
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-          <line
-            x1="100"
-            y1="135"
-            x2="100"
-            y2="155"
-            stroke={goldAccent}
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-        </g>
+        </circle>
 
         {/* Bordure subtile */}
         <circle
-          cx="100"
-          cy="100"
-          r="88"
+          cx="50"
+          cy="50"
+          r="43"
           fill="none"
-          stroke="rgba(255,255,255,0.1)"
-          strokeWidth="2"
-          className="transition-all duration-300"
+          stroke="rgba(255,255,255,0.2)"
+          strokeWidth="0.5"
         />
       </svg>
 
-      {/* Texte FORFEO SUPPLY - Optionnel */}
+      {/* Texte FORFEO SUPPLY - Version responsive */}
       {withText && (
-        <div className="flex flex-col leading-tight">
-          <span className={`font-bold text-lg tracking-wider ${dark ? 'text-gray-900' : 'text-white'}`}>
+        <div className={`flex flex-col leading-tight ${size === "sm" ? "scale-90" : ""}`}>
+          <span className={`font-bold tracking-tight ${dark ? 'text-gray-900' : 'text-white'} ${
+            size === "sm" ? "text-sm" : 
+            size === "md" ? "text-lg" : 
+            size === "lg" ? "text-xl" : "text-2xl"
+          }`}>
             FORFEO
           </span>
-          <span className={`font-light text-xs tracking-widest ${dark ? 'text-gray-600' : 'text-gray-300'}`}>
+          <span className={`font-light tracking-wider ${dark ? 'text-gray-600' : 'text-gray-300'} ${
+            size === "sm" ? "text-xs" : 
+            size === "md" ? "text-xs" : 
+            size === "lg" ? "text-sm" : "text-base"
+          }`}>
             SUPPLY
           </span>
         </div>
