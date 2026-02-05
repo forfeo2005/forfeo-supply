@@ -1,3 +1,4 @@
+// frontend/src/components/Header.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabase';
@@ -68,16 +69,15 @@ const Header = () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    // onAuthStateChange s'occupe du setUser(null)
     navigate('/');
   };
 
   const isSolid = scrolled || mobileMenuOpen;
 
-  // MODIFICATION : Toujours utiliser des couleurs contrastées pour les icônes
+  // Couleurs chic pour 2026
   const textColorClass = 'text-slate-800';
   const iconColorClass = 'text-slate-800';
-  const isDarkLogo = true; // Toujours utiliser le logo sombre pour la visibilité
+  const isDarkLogo = true;
 
   const headerClassName = useMemo(() => {
     return `fixed w-full z-50 transition-all duration-300 ${
@@ -88,50 +88,53 @@ const Header = () => {
   return (
     <header className={headerClassName}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex justify-between items-center">
-        {/* LOGO */}
+        {/* LOGO - Version avec texte FORFEO SUPPLY */}
         <Link
           to="/"
-          className="flex items-center gap-2 group focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded-lg"
-          aria-label="Aller à l'accueil"
+          className="flex items-center gap-3 group focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded-lg"
+          aria-label="Aller à l'accueil Forfeo Supply"
         >
           <ForfeoLogo
-            className="w-8 h-8 sm:w-10 sm:h-10 transition-transform group-hover:scale-105"
+            className="transition-transform group-hover:scale-105"
             dark={isDarkLogo}
+            size="md"
           />
-          <span
-            className={`text-lg sm:text-xl font-extrabold tracking-tight ${textColorClass} transition-colors`}
-          >
-            Forfeo
-          </span>
+          <div className="flex flex-col leading-tight">
+            <span className={`text-lg sm:text-xl font-bold tracking-tight ${textColorClass} transition-colors`}>
+              FORFEO
+            </span>
+            <span className="text-xs text-emerald-600 font-medium tracking-wider uppercase">
+              SUPPLY
+            </span>
+          </div>
         </Link>
 
         {/* NAV DESKTOP */}
-        <nav className="hidden md:flex items-center gap-6" aria-label="Navigation principale">
+        <nav className="hidden md:flex items-center gap-8" aria-label="Navigation principale">
           <Link
             to="/market"
-            className={`text-sm font-semibold hover:text-emerald-500 transition-colors ${textColorClass} focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded-md px-1 py-1`}
+            className={`text-sm font-semibold hover:text-emerald-500 transition-colors ${textColorClass} focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded-md px-2 py-1`}
           >
             Le Marché
           </Link>
 
-          {/* ✅ Nouveau lien Ressources */}
           <Link
             to="/resources"
-            className={`text-sm font-semibold hover:text-emerald-500 transition-colors ${textColorClass} focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded-md px-1 py-1`}
+            className={`text-sm font-semibold hover:text-emerald-500 transition-colors ${textColorClass} focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded-md px-2 py-1`}
           >
             Ressources
           </Link>
 
           <Link
             to="/about"
-            className={`text-sm font-semibold hover:text-emerald-500 transition-colors ${textColorClass} focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded-md px-1 py-1`}
+            className={`text-sm font-semibold hover:text-emerald-500 transition-colors ${textColorClass} focus:outline-none focus:ring-2 focus:ring-emerald-400/60 rounded-md px-2 py-1`}
           >
             À propos
           </Link>
         </nav>
 
         {/* ACTIONS DESKTOP */}
-        <div className="hidden md:flex items-center gap-3 sm:gap-4">
+        <div className="hidden md:flex items-center gap-4 sm:gap-6">
           {/* Panier */}
           <Link
             to="/cart"
@@ -194,6 +197,19 @@ const Header = () => {
             id="mobile-menu"
             className="md:hidden absolute top-full left-0 w-full bg-white border-t border-slate-100 shadow-xl p-4 flex flex-col gap-2 z-50"
           >
+            {/* Logo mobile en haut */}
+            <div className="flex items-center gap-3 px-4 py-3 mb-2">
+              <ForfeoLogo
+                className="w-8 h-8"
+                dark={true}
+                size="sm"
+              />
+              <div className="flex flex-col leading-tight">
+                <span className="text-lg font-bold text-slate-900">FORFEO</span>
+                <span className="text-xs text-emerald-600 font-medium tracking-wider">SUPPLY</span>
+              </div>
+            </div>
+
             <Link
               to="/market"
               className="text-base font-bold text-slate-800 py-3 px-4 rounded-lg hover:bg-slate-50"
@@ -201,7 +217,6 @@ const Header = () => {
               Le Marché
             </Link>
 
-            {/* ✅ Lien mobile vers Ressources */}
             <Link
               to="/resources"
               className="text-base font-bold text-slate-800 py-3 px-4 rounded-lg hover:bg-slate-50"
