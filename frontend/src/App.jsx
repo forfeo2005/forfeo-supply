@@ -4,23 +4,26 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 // Import des composants
 import Header from './components/Header';
 import Footer from './components/Footer';
+
+// Pages publiques
 import Home from './pages/Home';
 import Marketplace from './pages/Marketplace';
 import About from './pages/About';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
 import Privacy from './pages/Privacy';
+import Cart from './pages/Cart';
+import Success from './pages/Success';
+import Resources from './pages/Resources';
+import ResourceDetail from './pages/ResourceDetail';
+
+// Dashboards (sans layout public)
+import Dashboard from './pages/Dashboard';
 import MerchantDashboard from './pages/MerchantDashboard';
 import AdminDashboard from './pages/AdminDashboard';
-import Cart from './pages/Cart';
-import Success from './pages/Success';      // Page Succès après paiement
-import Resources from './pages/Resources';  // Page Ressources / Blog
-import ResourceDetail from './pages/ResourceDetail'; // ✅ NOUVEAU : page détail d'article /resources/:slug
 
 // Layout standard pour les pages publiques
 const Layout = ({ children }) => (
   <div className="flex flex-col min-h-screen">
-    {/* Header global */}
     <Header />
     <main className="flex-grow">
       {children}
@@ -34,12 +37,12 @@ function App() {
     <Router>
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
         <Routes>
-          {/* 1. ROUTES DASHBOARD (Isolées, sans Layout public) */}
-          <Route path="/admin" element={<AdminDashboard />} />       {/* Espace Admin */}
-          <Route path="/dashboard" element={<Dashboard />} />        {/* Ancien espace / Dashboard générique */}
-          <Route path="/merchant" element={<MerchantDashboard />} /> {/* Espace acheteur / comparateur */}
+          {/* 1. ROUTES DASHBOARD (isolées, sans Layout public) */}
+          <Route path="/admin" element={<AdminDashboard />} />        {/* Espace Admin */}
+          <Route path="/dashboard" element={<Dashboard />} />         {/* Ancien espace / Dashboard générique */}
+          <Route path="/merchant" element={<MerchantDashboard />} />  {/* Espace acheteur / comparateur */}
 
-          {/* 2. ROUTES PUBLIQUES (Avec Header + Footer via Layout) */}
+          {/* 2. ROUTES PUBLIQUES (avec Header + Footer via Layout) */}
           <Route
             path="/"
             element={
@@ -83,7 +86,7 @@ function App() {
             }
           />
 
-          {/* ✅ NOUVEAU : page détail article /resources/:slug */}
+          {/* Détail d’un article : /resources/:slug */}
           <Route
             path="/resources/:slug"
             element={
@@ -93,7 +96,7 @@ function App() {
             }
           />
 
-          {/* 3. ROUTE PANIER */}
+          {/* 3. Panier */}
           <Route
             path="/cart"
             element={
@@ -103,7 +106,7 @@ function App() {
             }
           />
 
-          {/* 4. ROUTE SUCCÈS (retour Stripe) */}
+          {/* 4. Succès paiement (retour Stripe) */}
           <Route
             path="/success"
             element={
@@ -113,7 +116,7 @@ function App() {
             }
           />
 
-          {/* 5. PAGE CONFIDENTIALITÉ / LÉGALE */}
+          {/* 5. Confidentialité / légal */}
           <Route
             path="/privacy"
             element={
